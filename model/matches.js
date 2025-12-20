@@ -315,7 +315,7 @@ function Match(params) {
   this.round = 1;
   this.create_at = Date.now();
   this.date = params.date || getDate();
-  this.state = params.state || CONST.PREGAME;
+  this.setState(params.state || CONST.PREGAME);
   var vk = params.venue ? params.venue.key ? params.venue.key : params.venue : null;
   var venue = vk ? venues.get(vk) : null;
   if(!venue) {
@@ -556,7 +556,7 @@ Match.prototype = {
 
     if(team.confirmed && team.ready) {
       //It's time for the match to move on to playing!
-      this.state = CONST.PICKING;
+      this.setState(CONST.PICKING);
       this.round = 1;
     }
     this.save();
@@ -734,7 +734,7 @@ Match.prototype = {
             this.step++;
           }
           else {
-            this.state = CONST.PLAYING;
+            this.setState(CONST.PLAYING);
           }
         }
       }
@@ -760,11 +760,11 @@ Match.prototype = {
         console.log("state:",this.state,"picksReady:",picksReady);
 
         if(this.state == CONST.PICKING) {
-          if(picksReady) this.state = CONST.RESPONDING;
+          if(picksReady) this.setState(CONST.RESPONDING);
         }
         else if(this.state == CONST.RESPONDING) {
           if(picksReady) {
-            this.state = CONST.PLAYING;
+            this.setState(CONST.PLAYING);
           }
         }
         // ++++++++++++ End of regular round logic +++++++++++++
@@ -988,7 +988,7 @@ Match.prototype = {
     if(roundDone(round)) {
       //Check to see if the match is done?
       // if(r == this.round) {
-      //   this.state = CONST.REVIEWING;
+      //   this.setState(CONST.REVIEWING);
       // }
     }
     else {
@@ -1059,10 +1059,10 @@ Match.prototype = {
 
       if(this.round < 4) {
         this.round++;
-        this.state = CONST.PICKING;
+        this.setState(CONST.PICKING);
       }
       else {
-        this.state = CONST.COMPLETE;
+        this.setState(CONST.COMPLETE);
       }
     };
     this.save();
@@ -1094,6 +1094,10 @@ Match.prototype = {
   save: function() {
     var json = JSON.stringify(this,null,2);
     fs.writeFileSync(`${stem}/matches/${this.key}.json`,json);
+  },
+  setState: function(s) {
+    this.state = s;
+    this.state_at = Date.now();
   }
 };
 

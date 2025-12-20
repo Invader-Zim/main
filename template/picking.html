@@ -13,6 +13,8 @@
 {{/shared}}
 <!-- {{role}} -->
 <b>Picking: {{team_name}}</b>
+<br>
+<b>Timer: <span class="elapsed"></span></b><br>
 
 {{#editable}}
 <form action="/matches/{{key}}/picks" method="POST">
@@ -32,11 +34,15 @@
 </form>
 {{/editable}}
 
+<script src="/timer.js"></script>
+
 <script>
 var machines = {{&machines}};
 var games = {{&games}};
 var lineup = {{&lineup}};
 var labels = {{&labels}};
+
+renderElapsedTime({{&referenceTime}});
 
 function makeSelect(name, hint, options, selected) {
   var html = '<select name="' +name+ '" class="custom-select">'+
