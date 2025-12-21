@@ -41,6 +41,10 @@ function makeRound(n) {
 
 var _map = {};
 
+// _myMatch maps user keys to match keys: (ukey -> key)
+
+var _myMatch = {};
+
 function getMatch(key) {
   var match = _map[key];
   if(!match) {
@@ -69,7 +73,51 @@ function loadMatch(key) {
   //Copy the rest of the match, but don't re-overwrite the away and home teams.
   util.copy(json, match, ['home','away']);
 
+  try {
+     buildUserToMatchMap(json);
+  } catch (e) {
+     console.error('loadMatch: failed to build user-to-match mapping.', e);
+  }
   return match;
+}
+
+// buildUserToMatchMap: builds a mapping from user key (ukey) to match key for all matches in the current season.
+// This is used by /mymatch to take the user directly to their match.
+
+function buildUserToMatchMap(match) {
+   if (!match) {
+      console.log('buildUserToMatchMap: null input match');
+      return;
+   }
+   var key = match.key;
+   var home = match.home && match.home.lineup;
+   var away = match.away && match.away.lineup;
+
+   if (!key || !home || !away || !match.date) {
+      console.log('buildUserToMatchMap: malformed input match', match);
+      return;
+   }
+   var date = new Date(match.date);
+   var keyDate = {key, date};
+
+   for (var i = 0; i < home.length; i++) {
+      var ukey = home[i].key;
+
+      if (isMyMatchStale(ukey, date)) {
+        _myMatch[ukey] = keyDate;
+      }
+   }
+   for (var j = 0; j < away.length; j++) {
+      var vkey = away[j].key;
+
+      if (isMyMatchStale(vkey, date)) {
+        _myMatch[vkey] = keyDate;
+     }
+   }
+}
+
+function isMyMatchStale(key, date) {
+   return (!_myMatch[key] || (_myMatch[key].date < date));
 }
 
 //TODO: This never really got used. Probably remove at some point.
@@ -1278,20 +1326,35 @@ function gameDone(game, r) {
 
 loadAll();
 
+function get(key) {
+   var match = _map[key];
+
+   if(!match) {
+     //Let's try to load.
+     match = loadMatch(key);
+     if(match) {
+       //Cache the match for faster access.
+       _map[key] = match;
+     }
+   }
+   return match;
+}
+
 module.exports = {
   Match,
   //TODO: Should probably add callbacks to get and all.
+  // uget: get match by user key
+  uget: function(ukey) {
+     var key = _myMatch[ukey] && _myMatch[ukey].key;
+
+     if (!key) {
+        return undefined;
+     } else {
+        return get(key);
+     }
+  },
   get: function(key) {
-    var match = _map[key];
-    if(!match) {
-      //Let's try to load.
-      match = loadMatch(key);
-      if(match) {
-        //Cache the match for faster access.
-        _map[key] = match;
-      }
-    }
-    return match;
+     return get(key);
   },
   all: function() {
     var list = [];
