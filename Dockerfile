@@ -4,7 +4,7 @@ WORKDIR /usr/src/app
 
 # These should be part of docker compose, or passed on the docker run command line
 ENV CREDENTIALS_FOLDER=/usr/src/credentials
-ENV CURRENT_SEASON=season-22
+ENV CURRENT_SEASON=season-23
 ENV NUM_WEEKS=10
 ENV DATA_FOLDER=/usr/src/data
 ENV IFPA_API_KEY=??
