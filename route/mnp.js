@@ -514,6 +514,21 @@ router.post('/matches/:match_id/players/add',function(req,res) {
   });
 });
 
+// /mymatch takes the user directly to their most recent match.
+
+router.get('/mymatch', function(req,res) {
+  var ukey = req.user.key || 'ANON';
+  var match = matches.uget(ukey);
+
+  if (!match) { return res.redirect('/matches'); }
+
+  res.send(renderMatch({
+    match: match,
+    ukey: ukey,
+    round: match.round
+  }));
+});
+
 router.get('/matches/:match_id',function(req,res) {
   //TODO: matches.get should be async to account for mongo.
   var match = matches.get(req.params.match_id);
