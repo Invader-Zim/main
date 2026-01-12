@@ -4,7 +4,7 @@ const config = {
   CREDENTIALS_FOLDER: process.env.CREDENTIALS_FOLDER ||  __dirname + '/credentials',
   DATA_FOLDER: process.env.DATA_FOLDER || __dirname + '/data',
   UPLOADS_FOLDER: process.env.UPLOADS_FOLDER || __dirname + '/data/uploads',
-  CURRENT_SEASON: process.env.CURRENT_SEASON || 'season-22',
+  CURRENT_SEASON: process.env.CURRENT_SEASON || 'season-14',
   NUM_WEEKS: process.env.NUM_WEEKS || 10,
   ANNOUNCEMENTS_TEMPLATE_URL: process.env.ANNOUNCEMENTS_TEMPLATE_URL || 'https://raw.githubusercontent.com/Invader-Zim/mnp-announcements/main/index.html',
   CREDENTIALS_FOLDER: process.env.CREDENTIALS_FOLDER || './credentials',
