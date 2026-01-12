@@ -779,6 +779,7 @@ function renderMatch(params) {
     doubles: (num == 4),
     shared: round.n == 5, //ROUND, using again.
     machines: JSON.stringify(venue.machines),
+    referenceTime: match.state_at,
     lineup: JSON.stringify(lineup),
     editable: editable,
     canAdd: ukey == CONST.ROOT,
