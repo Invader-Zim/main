@@ -91,6 +91,9 @@ Lineup: {{lineup.length}} / Players IPR: {{team_rating}} / Expected HCP: {{team_
   {{#rating}}
   <span class="badge badge-{{rating}}">{{rating}}</span>
   {{/rating}}
+  {{^rating}}
+  <span class="badge badge-{{rating}}">1</span>
+  {{/rating}}
 </td>
 <td>{{name}}{{#sub}} (SUB){{/sub}}</td>
 <td class="text-xs-center">{{#num_played}}({{.}}){{/num_played}}</td>

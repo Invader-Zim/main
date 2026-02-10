@@ -81,6 +81,9 @@ $(document).ready(function() {
     {{#rating}}
     <span class="badge badge-{{rating}}">{{rating}}</span>
     {{/rating}}
+    {{^rating}}
+    <span class="badge badge-{{rating}}">1</span>
+    {{/rating}}
   </td>
   <td class="text-xs-center">{{num_matches}}</td>
   <td>{{ppm}}</td>

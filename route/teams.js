@@ -114,8 +114,12 @@ router.get('/teams/:team_id',function(req,res) {
 
   const lineup = team.roster.map(p => {
     const rating = IPR.forName(p.name) || 0;
-    // TODO: Handle cases where rating == undefined, instead of default to 0.
-    teamRating += parseInt(rating);
+    if (parseInt(rating) > 0) {
+      teamRating += parseInt(rating);
+    } else {
+      // default player IPR is 1
+      teamRating += 1;
+    }
 
     const pk = makeKey(p.name); //TODO: UGLY makeKey call.
     // TODO: What divisions to show? Thinking either all or the div of the team.

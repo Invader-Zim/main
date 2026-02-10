@@ -187,9 +187,7 @@ margin-left: 7px;
   background-color: rgba(75,5,75,0.5);
 }
 .badge-0 {
-  background-color: transparent;
-  text-shadow: unset;
-  color: transparent;
+  background-color: rgba(5,75,5,0.5);
 }
 
 .indent {
