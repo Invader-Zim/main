@@ -12,7 +12,7 @@ if (!fs.existsSync(inputDir) || !fs.statSync(inputDir).isDirectory()) {
     process.exit(1);
 }
 
-const outputFile = path.join(inputDir, "..") + "/players.csv";
+const outputFile = path.join(inputDir, "..") + "/player_accounts.csv";
 let whitespaceCount = 0;
 
 // ---- Strict RFC-4180 CSV escaping ----
