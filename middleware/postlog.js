@@ -17,6 +17,22 @@ const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
 console.log("Loaded postlog.js");
 
+router.post('/games/:game_id/report', function(req, res, next) {
+   var gameId = req.params.game_id;
+   var parts = gameId && gameId.split('.');
+   var matchId = parts && parts[0];
+   var game = parts && (parts.length >= 3) && parts[2];
+   var match = matchId && matches.get(matchId);
+
+   if (match) {
+      req._match = match;
+   }
+   if (game) {
+      req._game = game;
+   }
+   next();
+});
+
 // Capture the match info when available.
 
 router.post('/matches/:match_id/*', function(req, res, next) {
@@ -94,26 +110,33 @@ router.post('/*',function(req,res,next) {
   next();
 
   function emit(req, data) {
-     var combined = data;
+     var augmented = data;
 
-     if (req._match) {
+     if (req._match && isPureObject(data)) {
         const match = req._match;
-        const matchInfo = {
-           match: {
-              key: match.key,
-              state: match.state,
-              round: match.round
-           }
+        const body = {
+           key: match.key,
+           state: match.state,
+           round: match.round
         };
 
-        console.log(match); // DEBUG
-
-        combined = {...data, ...matchInfo};
+        if (req._game) {
+           body.game = req._game;
+        }
+        augmented = {...data};
+        // Combine bodies. If a field was present in the original post, keep the original
+        augmented.body = (data.body) ? {...body, ...data.body} : body;
      }
-     var chunk = JSON.stringify(combined, null, 2);
+     var chunk = JSON.stringify(augmented, null, 2);
      var id = util.digest(chunk);
 
      fs.writeFileSync(DATA_FOLDER + '/posts/' + id, chunk);
+  }
+
+  // isPureObject: only true for a plain-old JS object which is not a String or Array or Date
+
+  function isPureObject(value) {
+     return Object.prototype.toString.call(value) === '[object Object]';
   }
 });
 
