@@ -15,13 +15,16 @@ console.log("INIT MNP...");
 var CONST = require('../constants');
 var util = require('../lib/util');
 var ids = require('../lib/ids');
+const makeKey = require('../lib/make-key');
 
 // MODELS
 var machines = require('../model/machines');
 var venues = require('../model/venues');
+const seasons = require('../model/seasons');
 var matches = require('../model/matches');
 const IPR = require('../model/ratings');
 var players = require('../model/players');
+const stats = require('../model/stats');
 var { getSuggestions } = require('../model/suggestions');
 
 var base = fs.readFileSync('./template/base.html').toString();
@@ -531,6 +534,29 @@ router.get('/mymatch', function(req,res) {
     ukey: ukey,
     round: match.round
   }));
+});
+
+// /myteam takes the user directly to their most recent team from stats.
+
+router.get('/myteam', function(req,res) {
+  const season = seasons.get();
+  var ukey = req.user.key || 'ANON';
+  var myTeam = '';
+
+  for(k in season.teams) {
+    const team = season.teams[k];
+    const roster = team.roster.filter(p => makeKey(p.name) == ukey);
+    if (roster.length) {
+      myTeam = team.key;
+    }
+  }
+
+  if (myTeam !== null) {
+    return res.redirect(`/teams/${myTeam}`);
+  }
+  else {
+    return res.redirect('/teams');
+  }
 });
 
 router.get('/matches/:match_id',function(req,res) {
