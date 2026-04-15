@@ -273,6 +273,9 @@ body.dark-mode #content .sum-row {
   background-color: #313244;
   color: #cdd6f4;
 }
+body.dark-mode #content .edit-btn img {
+  filter: invert(1);
+}
 body.dark-mode #content .score {
   color: #cdd6f4;
   border-color: #89b4fa;
@@ -297,6 +300,13 @@ body.dark-mode #content textarea {
 body.dark-mode #content input::placeholder,
 body.dark-mode #content textarea::placeholder {
   color: #7f849c;
+}
+body.dark-mode #content input[type="file"]::file-selector-button,
+body.dark-mode #content input[type="file"]::-webkit-file-upload-button {
+  background-color: #45475a;
+  color: #cdd6f4;
+  border-color: #585b70;
+  border-style: solid;
 }
 body.dark-mode #content .btn-default,
 body.dark-mode #content .btn-secondary {
