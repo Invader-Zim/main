@@ -11,6 +11,8 @@ var imageChanged = false;
 var posChanged = false;
 var scoreChanged = false;
 
+var MAX_WIDTH = 512;
+
 var adjustScale = 1;
 var adjustDeltaX = 0;
 var adjustDeltaY = 0;
@@ -231,7 +233,9 @@ console.log("setImageData()...");
   resizeImage(data, function(resized) {
     imageData = resized;
     renderImage();
-    $('#canvas').show();
+    // Use css() instead of show(): canvas defaults to display:inline, so
+    // show() restores inline rather than block, breaking margin:0 auto centering.
+    $('#canvas').css('display', 'block');
     $('#cell-left').show();
     $('#cell-right').show();
   });
@@ -277,7 +281,7 @@ function drawImage() {
   var h = img.height;
 
   // 2:1 canvas: width = min(rendered width, 1024px), height = width/2
-  var clientW = canvas.clientWidth || Math.min((canvas.parentElement || document.body).clientWidth || 300, 1024);
+  var clientW = canvas.clientWidth || Math.min((canvas.parentElement || document.body).clientWidth || 300, MAX_WIDTH);
   var canvasW = clientW;
   var canvasH = Math.round(canvasW / 2);
   canvas.width  = canvasW;
