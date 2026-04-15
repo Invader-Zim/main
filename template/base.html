@@ -81,6 +81,8 @@ http://webdesignerwall.com/tutorials/css-responsive-navigation-menu
       <a class="dropdown-item" href="/NEWPLAYERS">NEW PLAYER INFORMATION</a>
       <a class="dropdown-item" href="/CONDUCT">REPORT PLAYER CONDUCT</a>
       <a class="dropdown-item" href="http://pinballstats.info/search/">PLAYER LOOKUP</a>
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-item" id="dark-mode-toggle" type="button">DARK MODE: <span id="dark-mode-label">OFF</span></button>
     </div>
   </div>
 </div>
@@ -106,6 +108,26 @@ $(document).ready(function() {
     $toggleButton.on('click', function() {
         $(this).toggleClass('button-open');
         $menuWrap.toggleClass('menu-show');
+    });
+
+    // Dark mode
+    function applyDarkMode(enabled) {
+        if (enabled) {
+            $('body').addClass('dark-mode');
+            $('#dark-mode-label').text('ON');
+        } else {
+            $('body').removeClass('dark-mode');
+            $('#dark-mode-label').text('OFF');
+        }
+    }
+
+    var darkMode = localStorage.getItem('darkMode') === 'true';
+    applyDarkMode(darkMode);
+
+    $('#dark-mode-toggle').on('click', function() {
+        darkMode = !darkMode;
+        localStorage.setItem('darkMode', darkMode);
+        applyDarkMode(darkMode);
     });
 });
 </script>
