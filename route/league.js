@@ -329,7 +329,7 @@ router.get('/players/:key',function(req,res) {
     // ifpa_rank: ifpa.rank(name) || 'Unknown',
     ipr: IPR.forName(name) || 'Unknown',
     // TODO: fullStats.history might be a case for moving history into divisions
-    history: fullStats.history
+    history: fullStats.history.sort((a, b) => a.week - b.week)
   },{
     content: template
   });
