@@ -241,3 +241,112 @@ margin-left: 7px;
 .div-tab {
   cursor: pointer;
 }
+
+.game-row-done    { background-color: #9F8; color: #111; }
+.game-row-pending { background-color: #DDD; color: #111; }
+
+/* Dark mode */
+body.dark-mode #content {
+  background-color: #1e1e2e;
+  color: #cdd6f4;
+}
+body.dark-mode #content a:link,
+body.dark-mode #content a:visited {
+  color: #89dceb;
+}
+body.dark-mode #content a:hover,
+body.dark-mode #content a:active {
+  color: #74c7ec;
+}
+body.dark-mode #content .header-row {
+  background-color: #005f5f;
+  color: #cdd6f4;
+}
+body.dark-mode #content .stripe {
+  background: #2a2a3e;
+}
+body.dark-mode #content table,
+body.dark-mode #content .table {
+  color: #cdd6f4;
+}
+body.dark-mode #content .sum-row {
+  background-color: #313244;
+  color: #cdd6f4;
+}
+body.dark-mode #content .edit-btn img {
+  filter: invert(1);
+}
+body.dark-mode #content .score {
+  color: #cdd6f4;
+  border-color: #89b4fa;
+}
+body.dark-mode #content .points {
+  color: #a6e3a1;
+}
+body.dark-mode #content #keypad {
+  background-color: #313244;
+  color: #cdd6f4;
+}
+body.dark-mode #content .num-press {
+  background-color: #45475a;
+}
+body.dark-mode #content input,
+body.dark-mode #content select,
+body.dark-mode #content textarea {
+  background-color: #313244;
+  color: #cdd6f4;
+  border-color: #45475a;
+}
+body.dark-mode #content input::placeholder,
+body.dark-mode #content textarea::placeholder {
+  color: #7f849c;
+}
+body.dark-mode #content input[type="file"]::file-selector-button,
+body.dark-mode #content input[type="file"]::-webkit-file-upload-button {
+  background-color: #45475a;
+  color: #cdd6f4;
+  border-color: #585b70;
+  border-style: solid;
+}
+body.dark-mode #content .btn-default,
+body.dark-mode #content .btn-secondary {
+  background-color: #313244;
+  color: #cdd6f4;
+  border-color: #45475a;
+}
+body.dark-mode #content hr {
+  border-color: #45475a;
+}
+body.dark-mode .nav-bar .btn-secondary {
+  background-color: #313244;
+  color: #cdd6f4;
+  border-color: #45475a;
+}
+body.dark-mode .nav-bar .btn-secondary:hover,
+body.dark-mode .nav-bar .btn-secondary:focus,
+body.dark-mode .nav-bar .btn-secondary:active {
+  background-color: #45475a;
+  color: #cdd6f4;
+  border-color: #585b70;
+}
+body.dark-mode .nav-bar .dropdown-menu {
+  background-color: #1e1e2e;
+  border-color: #45475a;
+}
+body.dark-mode .nav-bar .dropdown-menu .dropdown-item {
+  color: #cdd6f4;
+}
+body.dark-mode .nav-bar .dropdown-menu .dropdown-item:hover,
+body.dark-mode .nav-bar .dropdown-menu .dropdown-item:focus {
+  background-color: #313244;
+  color: #89dceb;
+}
+body.dark-mode .nav-bar .dropdown-menu .dropdown-divider {
+  border-color: #585b70;
+}
+body.dark-mode #sugs {
+  background: #313244;
+  color: #cdd6f4;
+}
+body.dark-mode .game-row-done    { background-color: #1e3a1e; color: #cdd6f4; }
+body.dark-mode .game-row-pending { background-color: #2a2a3e; color: #cdd6f4; }

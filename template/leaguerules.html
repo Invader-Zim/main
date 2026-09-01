@@ -17,9 +17,25 @@
     li.indent0 {margin: 5.0px 20.0px 5.0px 36.0px; line-height: 17.0px; font: 14.7px Arial; color: #000000; -webkit-text-stroke: #000000}
     .newrule * {color: #008800; -webkit-text-stroke: #008800}
     .newrule {color: #008800; -webkit-text-stroke: #008800}
+    body.dark-mode        { background-color: #1e1e2e; }
+    body.dark-mode h1,
+    body.dark-mode h2     { color: #cdd6f4; -webkit-text-stroke: #cdd6f4 }
+    body.dark-mode p      { color: #cdd6f4; -webkit-text-stroke: #cdd6f4 }
+    body.dark-mode p.doc_title  { color: #cdd6f4; -webkit-text-stroke: #cdd6f4 }
+    body.dark-mode p.last_updated { color: #a6e3a1; -webkit-text-stroke: #a6e3a1 }
+    body.dark-mode p.toc0,
+    body.dark-mode p.toc1 { color: #89b4fa; -webkit-text-stroke: #89b4fa }
+    body.dark-mode p.note { color: #89b4fa; -webkit-text-stroke: #89b4fa }
+    body.dark-mode li,
+    body.dark-mode li.indent0 { color: #cdd6f4; -webkit-text-stroke: #cdd6f4 }
+    body.dark-mode .newrule *,
+    body.dark-mode .newrule   { color: #a6e3a1; -webkit-text-stroke: #a6e3a1 }
+    body.dark-mode a          { color: #89b4fa; }
+    body.dark-mode a:visited  { color: #cba6f7; }
   </style>
 </head>
 <body>
+<script>if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark-mode');</script>
 <p class="doc_title">League Rules for Monday Night Pinball</p>
 <p class="last_updated"><a href="#L0.04">V4.19</a> (Last updated: 2026-1-24 by Michael Adcock)</p>
 <br>
