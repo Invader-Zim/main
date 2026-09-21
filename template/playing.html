@@ -117,8 +117,8 @@ for(var i = 0; i < games.length; i++) {
   chunk += '<td>' +makeNum(game.points_4)+ '</td>';
   chunk += '</tr>';
 {{/doubles}}
-  var color = game.done ? '#9F8' : '#DDD';
-  chunk += '<tr style="background-color: ' +color+ ';font-weight: bold;">';
+  var rowClass = game.done ? 'game-row-done' : 'game-row-pending';
+  chunk += '<tr class="' +rowClass+ '" style="font-weight: bold;">';
   chunk += '<td style="text-align:right;">' +makeNum(game.score_13)+ '</td>';
   chunk += '<td>' +makeNum(game.points_13)+ '</td>';
   chunk += '<td style="text-align:right;">' +makeNum(game.score_24)+ '</td>';
