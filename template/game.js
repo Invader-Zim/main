@@ -11,6 +11,8 @@ var imageChanged = false;
 var posChanged = false;
 var scoreChanged = false;
 
+var MAX_WIDTH = 512;
+
 var adjustScale = 1;
 var adjustDeltaX = 0;
 var adjustDeltaY = 0;
@@ -231,7 +233,9 @@ console.log("setImageData()...");
   resizeImage(data, function(resized) {
     imageData = resized;
     renderImage();
-    $('#canvas').show();
+    // Use css() instead of show(): canvas defaults to display:inline, so
+    // show() restores inline rather than block, breaking margin:0 auto centering.
+    $('#canvas').css('display', 'block');
     $('#cell-left').show();
     $('#cell-right').show();
   });
@@ -269,9 +273,6 @@ function renderImage() {
 
 function drawImage() {
   var img = imgElm;
-  var MAX_WIDTH = 300;
-  var MAX_HEIGHT = 188;
-
   var canvas = document.getElementById('canvas');
   var ctx = canvas.getContext('2d');
   var ang = (imageRot + 360) % 360;
@@ -279,51 +280,33 @@ function drawImage() {
   var w = img.width;
   var h = img.height;
 
-  canvas.width  = MAX_WIDTH;
-  canvas.height = MAX_HEIGHT;
+  // 2:1 canvas: width = min(rendered width, 1024px), height = width/2
+  var clientW = canvas.clientWidth || Math.min((canvas.parentElement || document.body).clientWidth || 300, MAX_WIDTH);
+  var canvasW = clientW;
+  var canvasH = Math.round(canvasW / 2);
+  canvas.width  = canvasW;
+  canvas.height = canvasH;
 
   var flip = (ang == 90 || ang == 270);
-  var dx = flip ? h/2 : w/2;
-  var dy = flip ? w/2 : h/2;
+  // Effective image dimensions in canvas space after rotation
+  var effW = flip ? h : w;
+  var effH = flip ? w : h;
 
-  //Calc scale factor.
-  var scale = 1;
-  if(flip) {
-    if(w > h) {
-// console.log("Case 1: flip,w>h,",MAX_HEIGHT + " / " + w);
-      scale = MAX_HEIGHT / w;
-    }
-    else {
-// console.log("Case 2: flip,h>=w,",MAX_WIDTH + " / " + h);
-      scale = MAX_WIDTH / h;
-    }
-  }
-  else {
-    if(w > h) {
-// console.log("Case 3: w>h,",MAX_WIDTH + " / " + w);
-      scale = MAX_WIDTH / w;
-    }
-    else {
-// console.log("Case 4: h>=w,",MAX_HEIGHT + " / " + h);
-      scale = MAX_HEIGHT / h;
-    }
-  }
-  // console.log("ang:",ang,"flip:",flip,"w:",w,"h:",h,"dx:",dx,"dy:",dy,"scale:",scale);
+  // Scale image to fill canvas width; height may overflow (cropped by canvas)
+  var baseScale = canvasW / effW;
+  var scale = baseScale * currentScale;
 
-  scale *= currentScale;
-  dx    += currentDeltaX;
-  dy    += currentDeltaY;
-  // console.log("trans -> scale:",scale,"dx:",dx,"dy:",dy);
-  //TODO: Clamp dx and dy to meaningful range.
+  // Position the image center at the canvas center (x and y computed separately)
+  var centerX = canvasW / (2 * baseScale);
+  var centerY = canvasH / (2 * baseScale);
+  var dx = centerX + currentDeltaX;
+  var dy = centerY + currentDeltaY;
 
-  ctx.scale(scale,scale);
+  ctx.scale(scale, scale);
   ctx.translate(dx, dy);
   ctx.rotate(ang * Math.PI / 180);
   ctx.translate(-w/2, -h/2);
   ctx.drawImage(img, 0, 0, w, h);
-  // var dataUrl = canvas.toDataURL("image/jpg");
-  // console.log("imageData: ",imageData.length);
-  // console.log("dataURL:   ",dataUrl.length);
 }
 
 function rotatePhoto(degrees) {
@@ -347,10 +330,13 @@ console.log("preview(), files.length:",files.length);
     var reader = new FileReader();
     reader.onload = function(e) {
       //Reset transform values for new images.
-      imageRot     = 0;
-      adjustScale  = 1;
-      adjustDeltaX = 0;
-      adjustDeltaY = 0;
+      imageRot      = 0;
+      adjustScale   = 1;
+      adjustDeltaX  = 0;
+      adjustDeltaY  = 0;
+      currentScale  = 1;
+      currentDeltaX = 0;
+      currentDeltaY = 0;
       setImageData(e.target.result);
       //TODO: We should do sha or md5 to compare imageData
       imageChanged = true;
