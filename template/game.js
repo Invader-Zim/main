@@ -5,7 +5,8 @@ var left_players = {{&left_players}};
 var right_players = {{&right_players}};
 var curScore = -1;
 var scores = [0,0,0,0];
-var imageData;
+var photoBlob;   //photo bytes to upload (a File or Blob), set when a new photo is chosen
+var imageUrl;    //what the preview shows: an object URL for a new photo, or /pics/<sha>
 var imageRot = 0;
 var imageChanged = false;
 var posChanged = false;
@@ -55,7 +56,17 @@ var EXIF_TAG_PIXEL_Y = 0xA003;
 var EXIF_TYPE_SHORT = 3;
 var EXIF_TYPE_LONG = 4;
 var EXIF_ORIENTATION_NORMAL = 1;
-var STRING_CHUNK_SIZE = 0x8000;
+//Largest photo the server accepts (lib/photos.js PHOTO_MAX_BYTES).
+var PHOTO_MAX_BYTES = {{photo_max_bytes}};
+var BYTES_PER_MEGABYTE = 1024 * 1024;
+var PHOTO_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'image/heif': '.heif'
+};
 var failureTimer = null;
 
 function sendChanges() {
@@ -87,8 +98,8 @@ console.log("scoreChanged:",scoreChanged);
   console.log(data);
 
   if(imageChanged) {
-    console.log("++ imageData len:",imageData.length);
-    data.photo_data = imageData;
+    console.log("++ photo bytes:", photoBlob.size);
+    data.photo = photoBlob;
     dirty = true;
   }
 
@@ -151,8 +162,17 @@ function hideFailure() {
 function sendData(data) {
   if(!data) return;
   console.log("sendData...");
-  console.log("length:",JSON.stringify(data).length);
-  var sentPhoto = !!data.photo_data;
+  var sentPhoto = !!data.photo;
+  //Multipart, so the photo goes up as raw bytes (see middleware/photo-upload.js).
+  var form = new FormData();
+  for(var field in data) {
+    if(field == 'photo') {
+      form.append('photo', data.photo, photoFilename(data.photo));
+    }
+    else {
+      form.append(field, data[field]);
+    }
+  }
   var startTime = Date.now();
   hideFailure();
   setSaveStatus("", false);
@@ -173,7 +193,9 @@ function sendData(data) {
       return x;
     },
     url: '/games/{{key}}.{{round}}.{{n}}/report',
-    data: data,
+    data: form,
+    processData: false,
+    contentType: false,
     method: 'POST',
     timeout: SAVE_TIMEOUT_MS,
     success: function(result) {
@@ -290,31 +312,9 @@ function loadThumb(url) {
   }
   curImageUrl = url;
 console.log("Trying to load thumb: " +url);
-  $.ajax({
-    xhr: function() {
-      var x = new XMLHttpRequest();
-      x.onprogress = function(e) {
-        console.log("prog:",e);
-        if(e.lengthComputable) {
-          var pct = 100 * e.loaded / e.total;
-          // $('#progress').css('width',pct+'%');
-          // TODO: Just let the image fill in as it loads.
-        }
-      }
-      return x;
-    },
-    url: url,
-    success: function(data) {
-console.log("success!",data.length);
-      // $('#progress').css('width','0%');
-      setImageData(data);
-      // transformPhoto();
-    },
-    error: function(xhr, status, err) {
-      // $('#progress').css('width','0%');
-      console.log(status,err);
-    }
-  });
+  //The server sends the image bytes with the right Content-Type (older
+  //base64 uploads are decoded there), so the browser can load it directly.
+  setImageUrl(url);
 }
 
 var currentScale = 1;
@@ -355,9 +355,13 @@ function setupImageController() {
   });
 }
 
-function setImageData(data) {
-console.log("setImageData()...");
-  imageData = data;
+function setImageUrl(url) {
+console.log("setImageUrl()...", url);
+  //Free the previous new-photo object URL once it's no longer shown.
+  if(imageUrl && imageUrl != url && imageUrl.indexOf('blob:') == 0) {
+    URL.revokeObjectURL(imageUrl);
+  }
+  imageUrl = url;
   renderImage();
   $('#canvas').show();
   $('#cell-left').show();
@@ -365,20 +369,27 @@ console.log("setImageData()...");
 }
 
 var imgElm;
+
 function setupImage() {
   imgElm = document.createElement('img');
   imgElm.onload = function() {
     drawImage();
   };
+  imgElm.onerror = function() {
+    console.log("Couldn't display photo: " + imgElm.src);
+  };
 }
 
 function renderImage() {
   if(!imgElm) setupImage();
-  imgElm.src = imageData;
+  imgElm.src = imageUrl;
 }
 
 function drawImage() {
   var img = imgElm;
+  //Nothing to draw until the photo has loaded, or if this browser can't
+  //display its format (e.g. HEIC outside Safari).
+  if(!img || !img.complete || !img.naturalWidth) return;
   var MAX_WIDTH = 300;
   var MAX_HEIGHT = 188;
 
@@ -461,34 +472,48 @@ console.log("preview(), files.length:",files.length);
 }
 
 function readPhoto(file) {
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    prepareUpload(file, e.target.result, function(uploadData) {
-      //Reset transform values for new images.
-      imageRot     = 0;
-      adjustScale  = 1;
-      adjustDeltaX = 0;
-      adjustDeltaY = 0;
-      setImageData(uploadData);
-      //TODO: We should do sha or md5 to compare imageData
-      imageChanged = true;
-      $('#save-icon').show();
-      updateSaveButton();
-    });
-  };
-  reader.readAsDataURL(file);
+  prepareUpload(file, function(blob) {
+    if(blob.size > PHOTO_MAX_BYTES) {
+      setSaveStatus("This photo is too large to upload (" + megabytes(blob.size) + " MB; the limit is " +
+        megabytes(PHOTO_MAX_BYTES) + " MB). Choose a smaller photo.", true);
+      return;
+    }
+    //Reset transform values for new images.
+    imageRot     = 0;
+    adjustScale  = 1;
+    adjustDeltaX = 0;
+    adjustDeltaY = 0;
+    photoBlob = blob;
+    setImageUrl(URL.createObjectURL(blob));
+    //TODO: We should do sha or md5 to compare photos
+    imageChanged = true;
+    $('#save-icon').show();
+    updateSaveButton();
+  });
+}
+
+function megabytes(bytes) {
+  return (bytes / BYTES_PER_MEGABYTE).toFixed(1);
+}
+
+//Name sent with the upload; the server works out the type from the bytes.
+function photoFilename(blob) {
+  var ext = PHOTO_EXTENSIONS[blob.type] || '';
+  return 'photo' + ext;
 }
 
 //Files up to UPLOAD_AS_IS_MAX_BYTES are sent untouched to avoid any quality loss.
 //Larger files are scaled down to about UPLOAD_TARGET_PIXELS (keeping the aspect
-//ratio) if bigger than that, and re-encoded as JPEG.
-function prepareUpload(file, dataUrl, callback) {
+//ratio) if bigger than that, and re-encoded as JPEG. Calls back with a Blob.
+function prepareUpload(file, callback) {
   console.log("prepareUpload():", file.type, file.size, "bytes");
   if(file.size <= UPLOAD_AS_IS_MAX_BYTES) {
-    return callback(dataUrl);
+    return callback(file);
   }
+  var fileUrl = URL.createObjectURL(file);
   var img = document.createElement('img');
   img.onload = function() {
+    URL.revokeObjectURL(fileUrl);
     var w = img.naturalWidth;
     var h = img.naturalHeight;
     if(w * h > UPLOAD_TARGET_PIXELS) {
@@ -507,14 +532,21 @@ function prepareUpload(file, dataUrl, callback) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, w, h);
     console.log("prepareUpload(): " + img.naturalWidth + "x" + img.naturalHeight + " -> " + w + "x" + h + " JPEG");
-    copyExif(file, canvas.toDataURL('image/jpeg', UPLOAD_JPEG_QUALITY), w, h, callback);
+    canvas.toBlob(function(jpeg) {
+      if(!jpeg) {
+        console.log("prepareUpload(): couldn't encode JPEG, sending as-is");
+        return callback(file);
+      }
+      copyExif(file, jpeg, w, h, callback);
+    }, 'image/jpeg', UPLOAD_JPEG_QUALITY);
   };
   //Formats this browser can't decode (e.g. HEIC outside Safari) are sent as-is.
   img.onerror = function() {
+    URL.revokeObjectURL(fileUrl);
     console.log("prepareUpload(): browser can't decode " + file.type + ", sending as-is");
-    callback(dataUrl);
+    callback(file);
   };
-  img.src = dataUrl;
+  img.src = fileUrl;
 }
 
 //Size for scaling w x h down to about UPLOAD_TARGET_PIXELS. When the aspect
@@ -553,14 +585,14 @@ function greatestCommonDivisor(a, b) {
 //Carry the original JPEG's EXIF (camera, time, location, ...) over to the
 //re-encoded JPEG. Only the EXIF block is copied, not the color profile: the
 //canvas has already converted colors and applied the rotation.
-function copyExif(file, jpegUrl, width, height, callback) {
-  file.slice(0, EXIF_SCAN_BYTES).arrayBuffer().then(function(buf) {
-    var out = jpegUrl;
+function copyExif(file, jpeg, width, height, callback) {
+  Promise.all([file.slice(0, EXIF_SCAN_BYTES).arrayBuffer(), jpeg.arrayBuffer()]).then(function(bufs) {
+    var out = jpeg;
     try {
-      var seg = findExifSegment(new Uint8Array(buf));
+      var seg = findExifSegment(new Uint8Array(bufs[0]));
       if(seg) {
         patchExif(seg, width, height);
-        out = bytesToDataUrl(insertExif(dataUrlToBytes(jpegUrl), seg), 'image/jpeg');
+        out = new Blob([insertExif(new Uint8Array(bufs[1]), seg)], { type: 'image/jpeg' });
         console.log("copyExif(): kept " + seg.length + " bytes of EXIF");
       }
     }
@@ -570,7 +602,7 @@ function copyExif(file, jpegUrl, width, height, callback) {
     callback(out);
   }, function(err) {
     console.log("copyExif(): couldn't read file, uploading without EXIF:", err);
-    callback(jpegUrl);
+    callback(jpeg);
   });
 }
 
@@ -643,23 +675,6 @@ function insertExif(jpeg, seg) {
   out.set(seg, pos);
   out.set(jpeg.subarray(pos), pos + seg.length);
   return out;
-}
-
-function dataUrlToBytes(dataUrl) {
-  var bin = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
-  var bytes = new Uint8Array(bin.length);
-  for(var i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function bytesToDataUrl(bytes, type) {
-  var bin = '';
-  for(var i = 0; i < bytes.length; i += STRING_CHUNK_SIZE) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + STRING_CHUNK_SIZE));
-  }
-  return 'data:' + type + ';base64,' + btoa(bin);
 }
 
 function navigate(url) {

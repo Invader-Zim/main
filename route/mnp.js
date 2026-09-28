@@ -10,6 +10,11 @@ const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 
+const photos = require('../lib/photos');
+const PHOTO_ID_PATTERN = /^[0-9a-f]{40}$/;
+const PHOTO_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const MIME_OCTET_STREAM = 'application/octet-stream';
+
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
 
@@ -952,6 +957,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
     doubles: (NUM_SCORES[round-1] == 4),
     shared: round == 5,
     game: JSON.stringify(game),
+    photo_max_bytes: photos.PHOTO_MAX_BYTES,
     machines: JSON.stringify(venue.machines),
     left_players: JSON.stringify(left_players),
     right_players: JSON.stringify(right_players),
@@ -1004,6 +1010,9 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
     return res.status(HTTP_FORBIDDEN).send("You are not allowed to report scores for this game.");
   }
   if(req._photo) {
+    if(!req._photo.type) {
+      return res.status(HTTP_BAD_REQUEST).send("Unsupported photo format.");
+    }
     savePhoto(req._photo);
   }
 
@@ -1022,16 +1031,40 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
   });
 });
 
+//Photos are named by sha1 and never change, so browsers may cache them for good.
 router.get('/pics/:pid',function(req,res) {
-  var filename = UPLOADS_FOLDER + '/' +req.params.pid;
-  console.log("Stephen: " + filename);
-  if(util.fileExists(filename)) {
-    res.sendFile(filename, {});
+  var pid = req.params.pid;
+  var filename = UPLOADS_FOLDER + '/' + pid;
+  if(!PHOTO_ID_PATTERN.test(pid) || !util.fileExists(filename)) {
+    return res.status(HTTP_NOT_FOUND).send("Photo not found.");
   }
-  else {
-    res.send("NOT FOUND");
+  res.set('Cache-Control', PHOTO_CACHE_CONTROL);
+
+  //Older uploads are base64 data-URL text; decode those to the image bytes.
+  var header = readFileHeader(filename, photos.PHOTO_HEADER_BYTES);
+  if(photos.isDataUrl(header)) {
+    var decoded = photos.decodeDataUrl(fs.readFileSync(filename, 'latin1'));
+    if(!decoded) {
+      return res.status(HTTP_NOT_FOUND).send("Photo not found.");
+    }
+    res.type(photos.detectImageType(decoded.buffer) || decoded.mime || MIME_OCTET_STREAM);
+    return res.send(decoded.buffer);
   }
+  res.type(photos.detectImageType(header) || MIME_OCTET_STREAM);
+  res.sendFile(filename);
 });
+
+function readFileHeader(filename, length) {
+  var fd = fs.openSync(filename, 'r');
+  try {
+    var buf = Buffer.alloc(length);
+    var n = fs.readSync(fd, buf, 0, length, 0);
+    return buf.slice(0, n);
+  }
+  finally {
+    fs.closeSync(fd);
+  }
+}
 
 function hasErrors(errors) {
    return (Array.isArray(errors)) ? (errors.length > 0) : errors;
