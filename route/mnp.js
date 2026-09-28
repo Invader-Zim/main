@@ -6,6 +6,10 @@ const config = require('../config');
 const DATA_FOLDER = config.DATA_FOLDER;
 const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
+const HTTP_BAD_REQUEST = 400;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
 
@@ -969,6 +973,18 @@ router.get('/games/:key.:round.:n',function(req,res) {
   res.send(html);
 });
 
+//Write an uploaded photo (set on req._photo by middleware/postlog.js) once the
+//request has been validated. Files are named by their sha, so repeats are skipped.
+function savePhoto(photo) {
+  var fn = UPLOADS_FOLDER + '/' + photo.sha;
+  if(util.fileExists(fn)) {
+    console.log("Already have " + fn);
+    return;
+  }
+  fs.writeFileSync(fn, photo.data);
+  console.log(" ... saved " + fn + " " + photo.data.length + " bytes");
+}
+
 router.post('/games/:key.:round.:n/report', function(req,res) {
   console.log("POST /games... ",req.params);
   console.log("req.type:", req.get('Content-Type'));
@@ -976,19 +992,29 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
   var match = matches.get(req.params.key);
   var round = req.params.round;
   var n = req.params.n ? parseInt(req.params.n) : 0;
+  var ukey = req.user.key || 'ANON';
 
   if(!match) {
-    return res.send("Unknown match: "+req.params.key);
+    return res.status(HTTP_NOT_FOUND).send("Unknown match: "+req.params.key+".");
+  }
+  if(!match.getGame(round,n)) {
+    return res.status(HTTP_NOT_FOUND).send("Unknown game: round "+round+" game "+n+".");
+  }
+  if(!match.canReport({ ukey: ukey, round: round, n: n })) {
+    return res.status(HTTP_FORBIDDEN).send("You are not allowed to report scores for this game.");
+  }
+  if(req._photo) {
+    savePhoto(req._photo);
   }
 
   match.reportScores({
-    ukey:   req.user.key,
+    ukey:   ukey,
     round:  req.params.round,
     n:      req.params.n,
     update: req.body
   }, function(err,m) {
     if(err) {
-      return res.send(err);
+      return res.status(HTTP_BAD_REQUEST).send(err);
     }
     var game = m.getGame(round,n);
 //    res.redirect('/games/'+req.params.key+'.'+req.params.round+'.'+req.params.n);

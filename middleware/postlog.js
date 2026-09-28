@@ -8,7 +8,6 @@ var router = express.Router();
 
 const config = require('../config');
 const DATA_FOLDER = config.DATA_FOLDER;
-const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
 //NOTE: By placing this middleware AFTER the users middleware,
 //	all the login, logout, and signup routes will be
@@ -69,16 +68,13 @@ router.post('/*',function(req,res,next) {
   //      them to a cache, and attach the filename to
   //      the req.
 
+  //The photo file is written by the route after it validates the request
+  //(see savePhoto in route/mnp.js), so rejected posts don't leave files.
   if(req.body.photo_data) {
-    console.log("Saving photo data ...");
+    console.log("Received photo data ...");
     var x = req.body.photo_data;
     var sha = util.digest(x);
-    var fn = UPLOADS_FOLDER + '/' +sha;
-    if(!util.fileExists(fn)) {
-      fs.writeFileSync(fn,x);
-      console.log(" ... saved " +fn+ " " +x.length+ " bytes");
-    }
-    else console.log("Already have " +fn);
+    req._photo = { sha: sha, data: x };
     req.body.photo_data = sha;
   }
   else console.log("No photo data");
