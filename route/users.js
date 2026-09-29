@@ -8,7 +8,8 @@ var players = require('../model/players');
 var venues = require('../model/venues');
 
 var COOKIE_NAME = 'mnp_sess';
-var COOKIE_OPTIONS = { maxAge: 1000*60*60*24*365*10 };
+//SameSite=Lax: other websites can't send requests with a player's login.
+var COOKIE_OPTIONS = { maxAge: 1000*60*60*24*365*10, sameSite: 'lax' };
 
 var router = express.Router();
 const DATA_FOLDER = require('../config').DATA_FOLDER;
