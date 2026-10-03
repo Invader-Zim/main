@@ -684,6 +684,14 @@ const nameSort = function(a, b) {
   return [a.name, b.name].sort()[0] === a.name ? -1 : 1;
 }
 
+//Venue machines are stored as keys; return a sorted copy, ordered by the
+//name shown to players (labels maps key -> name), ignoring case.
+function sortMachineKeys(keys, labels) {
+  return keys.slice().sort(function(a, b) {
+    return (labels[a] || a).localeCompare(labels[b] || b, undefined, { sensitivity: 'base' });
+  });
+}
+
 //Only need match and ukey for params. Optional: errors
 function renderMatch(params) {
 //console.log(params);
@@ -833,7 +841,7 @@ function renderMatch(params) {
     // singles: ????
     doubles: (num == 4),
     shared: round.n == 5, //ROUND, using again.
-    machines: JSON.stringify(venue.machines),
+    machines: JSON.stringify(sortMachineKeys(venue.machines, labels)),
     referenceTime: match.state_at,
     lineup: JSON.stringify(lineup),
     editable: editable,
@@ -929,7 +937,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
 
   left.lineup.sort(nameSort);
   right.lineup.sort(nameSort);
-  venue.machines.sort(nameSort); // TODO: Move inside venue logic.
+  var sortedMachines = sortMachineKeys(venue.machines, labels);
 
   var left_players = [];
   for(i in left.lineup) {
@@ -958,7 +966,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
     shared: round == 5,
     game: JSON.stringify(game),
     photo_max_bytes: photos.PHOTO_MAX_BYTES,
-    machines: JSON.stringify(venue.machines),
+    machines: JSON.stringify(sortedMachines),
     left_players: JSON.stringify(left_players),
     right_players: JSON.stringify(right_players),
     machine: machine,

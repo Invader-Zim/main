@@ -821,10 +821,8 @@ function makeSelect(name, options, selected) {
   for(var i = 0; i < options.length; i++) {
     var opt = options[i];
     var value = opt.value || opt;
+    //Full names; CSS (.custom-select in game.css) adds an ellipsis if they don't fit.
     var label = opt.label || labels[opt];
-    if(label.length > 10) {
-      label = label.substring(0,10);
-    }
     var sel = opt == selected ? ' selected' : '';
     html += '<option value="' +value+ '"' +sel+ '>' +label+ '</option>';
   }
