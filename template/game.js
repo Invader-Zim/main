@@ -59,6 +59,11 @@ var EXIF_ORIENTATION_NORMAL = 1;
 //Largest photo the server accepts (lib/photos.js PHOTO_MAX_BYTES).
 var PHOTO_MAX_BYTES = {{photo_max_bytes}};
 var BYTES_PER_MEGABYTE = 1024 * 1024;
+//Photo preview zoom: 1 fits the whole photo; pinching can zoom in but not below this.
+var MIN_PHOTO_ZOOM = 1;
+//Photo preview canvas size.
+var PREVIEW_WIDTH = 300;
+var PREVIEW_HEIGHT = 188;
 var PHOTO_EXTENSIONS = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -336,23 +341,66 @@ function setupImageController() {
   pinch.recognizeWith(pan);
   mc.add([pinch,pan]);
 
-  // Handles pinch and pan events/transforming at the same time;
+  //A point of the photo (in photo pixels, in the rotated frame) lands on the
+  //preview at zoom * (delta + point), where zoom = fit * scale. When a gesture
+  //starts, remember which photo point is under the fingers; every move then
+  //puts that point back under the fingers. So a pan follows the finger
+  //exactly and a pinch zooms about the point between the fingers.
+  var anchor = null;
+
+  //pan and pinch can both start during one gesture; anchor once, from the
+  //framing before the gesture and where the fingers first touched.
+  mc.on("panstart pinchstart", function (ev) {
+    if(anchor || !imgElm || !imgElm.naturalWidth) return;
+    var zoom = previewLayout().fit * adjustScale;
+    var start = canvasPoint(ev.center.x - ev.deltaX, ev.center.y - ev.deltaY);
+    anchor = { x: start.x / zoom - adjustDeltaX, y: start.y / zoom - adjustDeltaY };
+  });
+
   mc.on("pinch pan", function (ev) {
-    // Adjusting the current pinch/pan event properties using the previous ones set when they finished touching
-    currentScale = adjustScale * ev.scale;
-    currentDeltaX = adjustDeltaX + (ev.deltaX / currentScale);
-    currentDeltaY = adjustDeltaY + (ev.deltaY / currentScale);
+    if(!anchor) return;
+    //Zoom in only: 1 is the whole photo fitted to the preview, and smaller just
+    //leaves empty space around it.
+    currentScale = Math.max(MIN_PHOTO_ZOOM, adjustScale * ev.scale);
+    var zoom = previewLayout().fit * currentScale;
+    var fingers = canvasPoint(ev.center.x, ev.center.y);
+    currentDeltaX = fingers.x / zoom - anchor.x;
+    currentDeltaY = fingers.y / zoom - anchor.y;
+    clampPan();
     posChanged = true;
     drawImage();
   });
 
-  mc.on("panend pinchend", function (ev) {
-    // Saving the final transforms for adjustment next time the user interacts.
+  //Saving the final transforms for adjustment next time the user interacts.
+  function saveFraming() {
     adjustScale = currentScale;
     adjustDeltaX = currentDeltaX;
     adjustDeltaY = currentDeltaY;
+  }
+
+  //A pinch ends as soon as one finger lifts, which may be before the other
+  //finger does, so this keeps the anchor for a pan that carries on.
+  mc.on("panend pinchend pancancel pinchcancel", function (ev) {
+    saveFraming();
     $('#save-icon').show();
   });
+
+  //The gesture is over only when the last finger lifts. Hammer reports that on
+  //its raw input (whether or not a pan or pinch was running), so end it there.
+  mc.on("hammer.input", function (ev) {
+    if(ev.isFinal && anchor) {
+      saveFraming();
+      anchor = null;
+    }
+  });
+}
+
+//A screen point (clientX/Y) in the preview canvas's own pixels.
+function canvasPoint(x, y) {
+  var canvas = document.getElementById('canvas');
+  var rect = canvas.getBoundingClientRect();
+  var k = canvas.width / rect.width;
+  return { x: (x - rect.left) * k, y: (y - rect.top) * k };
 }
 
 function setImageUrl(url) {
@@ -369,10 +417,24 @@ console.log("setImageUrl()...", url);
 }
 
 var imgElm;
+var fitNewPhoto = false;   //set when a new photo is chosen, until it has loaded
 
 function setupImage() {
   imgElm = document.createElement('img');
   imgElm.onload = function() {
+    //A newly chosen photo starts positioned to cover the preview (or centered
+    //where it's too small to); a saved photo keeps its stored framing.
+    if(fitNewPhoto) {
+      fitNewPhoto = false;
+      clampPan();
+      //Save this framing with the photo, so a reload and score detection see
+      //the same view as the player.
+      if(currentDeltaX != adjustDeltaX || currentDeltaY != adjustDeltaY) {
+        posChanged = true;
+      }
+      adjustDeltaX = currentDeltaX;
+      adjustDeltaY = currentDeltaY;
+    }
     drawImage();
   };
   imgElm.onerror = function() {
@@ -385,57 +447,67 @@ function renderImage() {
   imgElm.src = imageUrl;
 }
 
+//How the photo sits in the preview before zoom and pan: its size once rotated
+//(width, height, in photo pixels) and the scale that fits it (fit).
+function previewLayout() {
+  var ang = (imageRot + 360) % 360;
+  var w = imgElm.width;
+  var h = imgElm.height;
+  var flip = (ang == 90 || ang == 270);
+  var scale;
+  if(flip) {
+    scale = (w > h) ? PREVIEW_HEIGHT / w : PREVIEW_WIDTH / h;
+  }
+  else {
+    scale = (w > h) ? PREVIEW_WIDTH / w : PREVIEW_HEIGHT / h;
+  }
+  return { angle: ang, width: flip ? h : w, height: flip ? w : h, fit: scale };
+}
+
+//Keep the photo covering the preview: its left/top edge lands at
+//zoom * delta and its right/bottom edge at zoom * (delta + size), so each
+//delta is limited to keep both edges outside the preview. Where the photo is
+//narrower (or shorter) than the preview, it is centered that way instead.
+function clampPan() {
+  if(!imgElm || !imgElm.naturalWidth) return;
+  var layout = previewLayout();
+  var zoom = layout.fit * currentScale;
+  currentDeltaX = clampAxis(currentDeltaX, PREVIEW_WIDTH / zoom, layout.width);
+  currentDeltaY = clampAxis(currentDeltaY, PREVIEW_HEIGHT / zoom, layout.height);
+}
+
+//delta limited to [view - size, 0] (view and size in photo pixels), or centered
+//when the photo is smaller than the view.
+function clampAxis(delta, view, size) {
+  if(size <= view) return (view - size) / 2;
+  return Math.min(0, Math.max(view - size, delta));
+}
+
 function drawImage() {
   var img = imgElm;
   //Nothing to draw until the photo has loaded, or if this browser can't
   //display its format (e.g. HEIC outside Safari).
   if(!img || !img.complete || !img.naturalWidth) return;
-  var MAX_WIDTH = 300;
-  var MAX_HEIGHT = 188;
-
   var canvas = document.getElementById('canvas');
   var ctx = canvas.getContext('2d');
-  var ang = (imageRot + 360) % 360;
-
+  var layout = previewLayout();
+  var ang = layout.angle;
   var w = img.width;
   var h = img.height;
 
-  canvas.width  = MAX_WIDTH;
-  canvas.height = MAX_HEIGHT;
+  canvas.width  = PREVIEW_WIDTH;
+  canvas.height = PREVIEW_HEIGHT;
 
-  var flip = (ang == 90 || ang == 270);
-  var dx = flip ? h/2 : w/2;
-  var dy = flip ? w/2 : h/2;
-
-  //Calc scale factor.
-  var scale = 1;
-  if(flip) {
-    if(w > h) {
-// console.log("Case 1: flip,w>h,",MAX_HEIGHT + " / " + w);
-      scale = MAX_HEIGHT / w;
-    }
-    else {
-// console.log("Case 2: flip,h>=w,",MAX_WIDTH + " / " + h);
-      scale = MAX_WIDTH / h;
-    }
-  }
-  else {
-    if(w > h) {
-// console.log("Case 3: w>h,",MAX_WIDTH + " / " + w);
-      scale = MAX_WIDTH / w;
-    }
-    else {
-// console.log("Case 4: h>=w,",MAX_HEIGHT + " / " + h);
-      scale = MAX_HEIGHT / h;
-    }
-  }
+  var dx = layout.width / 2;
+  var dy = layout.height / 2;
+  var scale = layout.fit;
   // console.log("ang:",ang,"flip:",flip,"w:",w,"h:",h,"dx:",dx,"dy:",dy,"scale:",scale);
 
   scale *= currentScale;
   dx    += currentDeltaX;
   dy    += currentDeltaY;
   // console.log("trans -> scale:",scale,"dx:",dx,"dy:",dy);
-  //TODO: Clamp dx and dy to meaningful range.
+  //Pan is limited so the photo keeps covering the preview (see clampPan).
 
   ctx.scale(scale,scale);
   ctx.translate(dx, dy);
@@ -453,6 +525,10 @@ function rotatePhoto(degrees) {
 console.log("rotatePhoto("+degrees+") -> " +imageRot);
   posChanged = true;
   rotationChanged = true;
+  //The photo's width and height swap, so keep it covering the preview.
+  clampPan();
+  adjustDeltaX = currentDeltaX;
+  adjustDeltaY = currentDeltaY;
   $('#save-icon').show();
   updateSaveButton();
   drawImage();
@@ -478,11 +554,17 @@ function readPhoto(file) {
         megabytes(PHOTO_MAX_BYTES) + " MB). Choose a smaller photo.", true);
       return;
     }
-    //Reset transform values for new images.
-    imageRot     = 0;
-    adjustScale  = 1;
-    adjustDeltaX = 0;
-    adjustDeltaY = 0;
+    //Reset transform values for new images: both the saved framing and the
+    //live one the preview draws with (drawImage uses current*), or the new
+    //photo inherits the previous photo's zoom and pan.
+    imageRot      = 0;
+    adjustScale   = 1;
+    adjustDeltaX  = 0;
+    adjustDeltaY  = 0;
+    currentScale  = 1;
+    currentDeltaX = 0;
+    currentDeltaY = 0;
+    fitNewPhoto = true;
     photoBlob = blob;
     setImageUrl(URL.createObjectURL(blob));
     //TODO: We should do sha or md5 to compare photos
