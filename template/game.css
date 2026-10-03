@@ -10,6 +10,8 @@
 }
 #scores {
   table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 #scores td:nth-child(odd) {
   width: 40%;
