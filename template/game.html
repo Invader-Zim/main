@@ -3,6 +3,7 @@
 <script>{{> script}}</script>
 <img id="success" class="success-begin" src="/check-clear.png">
 <div id="failure" aria-hidden="true">&#x2716;&#xFE0E;</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <a href="/matches/{{key}}">{{name}}</a> : Rnd {{round}} : Game {{n}}
 <br>
@@ -14,13 +15,16 @@
 {{/editable}}
 <hr>
 {{#editable}}
-<table class="table">
+<table class="table" id="photo-row">
 <tr>
 <td id="cell-left" style="display:none;">
 <a onclick="rotatePhoto(-90);return false;"><img src="/rotate_ccw.png" width="20" height="20"></a>
 </td>
 <td>
-<input type="file" id="photos" accept="image/*" onchange="preview(this.files);">
+<!-- The file input is hidden so it doesn't show "No file chosen" or the file
+     name; the label below is its visible Choose File button. -->
+<input type="file" id="photos" class="photo-input" accept="image/*" onchange="PhotoUpload.preview(this.files);">
+<label for="photos" class="btn btn-sm btn-secondary photo-btn">Choose File</label>
 </td>
 <td id="cell-right" style="display:none;">
 <a onclick="rotatePhoto(90);return false;"><img src="/rotate_cw.png" width="20" height="20"></a>
@@ -98,9 +102,9 @@
 <!--
 <td style="text-align:right;"><span id="s13"></span></td>
 -->
-<td><span id="s13"></span></td>
+<td class="score-total"><span id="s13"></span></td>
 <td style="text-align:center;"><span id="p13"></span></td>
-<td><span id="s24"></span></td>
+<td class="score-total"><span id="s24"></span></td>
 <td style="text-align:center;"><span id="p24"></span></td>
 </tr>
 {{/doubles}}
@@ -134,9 +138,14 @@
 </td>
 -->
 {{/prev}}
+{{#can_detect}}
+<td>
+<button type="button" id="detect-btn" class="btn btn-sm btn-secondary" onclick="DetectScores.detectScores();">Detect Scores</button>
+</td>
+{{/can_detect}}
 <td>
 {{#editable}}
-<input type="button" class="mt-1 btn btn-sm btn-primary" id="save-btn" value="SAVE" onclick="sendChanges();">
+<input type="button" class="btn btn-sm btn-primary" id="save-btn" value="Save" onclick="sendChanges();">
 {{/editable}}
 </td>
 {{#next}}
@@ -153,11 +162,57 @@
 {{/editable}}
 </center>
 
-<div class="modal-cover">
+<div id="save-cover" class="modal-cover">
   <div class="modal-container">
     <div>Saving...</div>
     <div class="modal-content">
       <div id="progress"></div>
     </div>
+  </div>
+</div>
+
+<!-- Shown in the same top-center spot while the server reads the scores. -->
+<div id="detect-cover" class="modal-cover">
+  <div class="modal-container detect-container">
+    <div class="spinner" aria-hidden="true"></div>
+    <div>Detecting Scores</div>
+  </div>
+</div>
+
+<div id="detected-cover" class="detected-cover">
+  <div class="detected-dialog" role="dialog" aria-modal="true" aria-labelledby="detected-message">
+    <!-- The photo cropped to where the scores were read, drawn by drawScoreCrop(). -->
+    <canvas id="detected-crop" class="detected-crop" aria-label="The scores in your photo"></canvas>
+    <p id="detected-message"></p>
+    <!-- One cell per player position, filled in by renderDetectedGrid(). -->
+    <div id="detected-grid" class="detected-grid"></div>
+    <!-- Edit: one player's score across the full width of the popup. -->
+    <div id="detected-single" class="detected-single">
+      <div id="detected-single-name" class="detected-single-name"></div>
+      <!-- One box per digit, filled in by renderSingleScore(); tap a box to select it. -->
+      <div id="detected-digits" class="detected-digits"></div>
+      <div class="digit-controls">
+        <!-- &#xFE0E; keeps ◀ ▶ as text; iPhones may otherwise draw them as emoji. -->
+        <button type="button" id="digit-insert-before-btn" class="digit-control digit-insert" aria-label="Insert a digit before the selected digit" onclick="DetectScores.insertDigit(false);">+&#x25C0;&#xFE0E;</button>
+        <button type="button" id="digit-delete-btn" class="digit-control digit-delete" aria-label="Delete the selected digit" onclick="DetectScores.deleteDigit();">✕</button>
+        <button type="button" id="digit-minus-btn" class="digit-control" aria-label="Decrease the selected digit" onclick="DetectScores.bumpDigit(-1);">−</button>
+        <button type="button" id="digit-plus-btn" class="digit-control" aria-label="Increase the selected digit" onclick="DetectScores.bumpDigit(1);">+</button>
+        <button type="button" id="digit-insert-after-btn" class="digit-control digit-insert" aria-label="Insert a digit after the selected digit" onclick="DetectScores.insertDigit(true);">&#x25B6;&#xFE0E;+</button>
+      </div>
+    </div>
+    <div class="detected-buttons">
+      <button type="button" id="reject-btn" class="btn btn-secondary" onclick="DetectScores.rejectDetected();">Cancel</button>
+      <button type="button" id="reorder-btn" class="btn btn-secondary" onclick="DetectScores.startReorder();">Reorder</button>
+      <button type="button" id="edit-btn" class="btn btn-secondary" onclick="DetectScores.startEditPick();">Edit</button>
+      <button type="button" id="edit-cancel-btn" class="btn btn-secondary" onclick="DetectScores.cancelEditPick();">Cancel</button>
+      <button type="button" id="digit-undo-btn" class="btn btn-secondary" onclick="DetectScores.undoDigitChange();">Undo</button>
+      <button type="button" id="digit-reset-btn" class="btn btn-secondary" onclick="DetectScores.resetDigits();">Reset</button>
+      <button type="button" id="digit-cancel-btn" class="btn btn-secondary" onclick="DetectScores.cancelEditing();">Cancel</button>
+      <button type="button" id="digit-accept-btn" class="btn btn-primary" onclick="DetectScores.acceptEditing();">Accept</button>
+      <button type="button" id="reorder-reset-btn" class="btn btn-secondary" onclick="DetectScores.resetReorder();">Reset</button>
+      <button type="button" id="reorder-cancel-btn" class="btn btn-secondary" onclick="DetectScores.cancelReorder();">Cancel</button>
+      <button type="button" id="accept-btn" class="btn btn-primary" onclick="DetectScores.acceptDetected();">Accept</button>
+    </div>
+    <p id="detected-credit" class="detected-credit"></p>
   </div>
 </div>

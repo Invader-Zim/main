@@ -30,6 +30,7 @@ router.use(require('../middleware/logging'));
 router.use(require('./users'));
 router.use(require('./venues'));
 router.use(require('./mnp'));
+router.use(require('./detect'));
 router.use(require('./league'));
 router.use(require('./machines'));
 router.use(require('./teams'));

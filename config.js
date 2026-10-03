@@ -14,6 +14,8 @@ const config = {
   HANDICAP_TEMPLATE_URL: process.env.HANDICAP_TEMPLATE_URL || 'https://raw.githubusercontent.com/Invader-Zim/mnp-announcements/main/handicapping.html',
   CREDENTIALS_FOLDER: process.env.CREDENTIALS_FOLDER || './credentials',
   IFPA_API_KEY: process.env.IFPA_API_KEY,
+  SCORE_SERVICE_URL: process.env.SCORE_SERVICE_URL || 'https://api.scores.pinball.group',
+  SCORE_SERVICE_API_KEY: process.env.SCORE_SERVICE_API_KEY,
   EMAIL_HOST: process.env.EMAIL_HOST,
   EMAIL_PORT: process.env.EMAIL_PORT,
   EMAIL_NAME: process.env.EMAIL_NAME,

@@ -9,11 +9,19 @@ const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
 
 const photos = require('../lib/photos');
-const PHOTO_ID_PATTERN = /^[0-9a-f]{40}$/;
 const PHOTO_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const MIME_OCTET_STREAM = 'application/octet-stream';
+
+const scoreService = require('../lib/score-service');
+
+//Parts of the game page's script that template/game.js includes.
+const GAME_PHOTO_UPLOAD_SCRIPT = './template/game-photo-upload.js';
+const GAME_DETECT_SCRIPT = './template/game-detect.js';
+//The Detect Scores popup's styles, added after game.css.
+const GAME_DETECT_STYLE = './template/game-detect.css';
 
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
@@ -907,7 +915,10 @@ router.get('/games/:key.:round.:n',function(req,res) {
   if(!game) { return res.redirect('/matches/'+req.params.key); }
   var template = fs.readFileSync('./template/game.html').toString();
   var css = fs.readFileSync('./template/game.css').toString();
+  var detectCss = fs.readFileSync(GAME_DETECT_STYLE).toString();
   var script = fs.readFileSync('./template/game.js').toString();
+  var photoUploadScript = fs.readFileSync(GAME_PHOTO_UPLOAD_SCRIPT).toString();
+  var detectScript = fs.readFileSync(GAME_DETECT_SCRIPT).toString();
   var venue = match.venue;
 
   var editable = match.canReport({
@@ -956,7 +967,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
     redirect_url: '/games/'+req.params.key+'.'+round+'.'+n,
     title: 'Game',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
-    style: css,
+    style: css + '\n' + detectCss,
     name: match.name,
     key: match.key,
     week: match.week,
@@ -976,12 +987,17 @@ router.get('/games/:key.:round.:n',function(req,res) {
     points_24: 0 + (game.points_2 || 0) + (game.points_4 || 0),
     type: GAME_TYPES[round-1],
     editable: editable,
+    //Detect Scores is offered to logged-in players when the score service key works.
+    can_detect: !!req.user.key && scoreService.isAvailable(),
     prev: prev,
     next: next,
     labels: JSON.stringify(labels)
   }, {
     content: template,
-    script: script
+    script: script,
+    //game.js includes these with {{> name}}.
+    game_photo_upload: photoUploadScript,
+    game_detect: detectScript
   });
 
   res.send(html);
@@ -1017,6 +1033,13 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
   if(!match.canReport({ ukey: ukey, round: round, n: n })) {
     return res.status(HTTP_FORBIDDEN).send("You are not allowed to report scores for this game.");
   }
+  //Framing for an already-saved photo must be for the photo the page is
+  //showing; someone else may have saved a newer one since the page loaded.
+  //(Older pages don't send photo_id; their framing is applied as before.)
+  if(!req._photo && req.body.photo_rotation !== undefined && req.body.photo_id &&
+     req.body.photo_id != photos.currentPhotoSha(match.getGame(round,n))) {
+    return res.status(HTTP_CONFLICT).send(photos.PHOTO_CHANGED_MESSAGE);
+  }
   if(req._photo) {
     if(!req._photo.type) {
       return res.status(HTTP_BAD_REQUEST).send("Unsupported photo format.");
@@ -1043,7 +1066,7 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
 router.get('/pics/:pid',function(req,res) {
   var pid = req.params.pid;
   var filename = UPLOADS_FOLDER + '/' + pid;
-  if(!PHOTO_ID_PATTERN.test(pid) || !util.fileExists(filename)) {
+  if(!photos.PHOTO_ID_PATTERN.test(pid) || !util.fileExists(filename)) {
     return res.status(HTTP_NOT_FOUND).send("Photo not found.");
   }
   res.set('Cache-Control', PHOTO_CACHE_CONTROL);

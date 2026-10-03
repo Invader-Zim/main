@@ -1346,6 +1346,7 @@ function get(key) {
 
 module.exports = {
   Match,
+  NUM_SCORES,
   //TODO: Should probably add callbacks to get and all.
   // uget: get match by user key
   uget: function(ukey) {

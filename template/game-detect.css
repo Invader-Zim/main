@@ -1,0 +1,232 @@
+.detected-cover {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  z-index: 20;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+.detected-dialog {
+  position: relative;
+  top: 50%;
+  width: 94%;
+  max-width: 400px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  margin: 0 auto;
+  padding: 12px;
+  text-align: center;
+  font-size: 1rem;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0px 0px 25px 10px #666;
+}
+.detected-dialog p {
+  margin-bottom: 10px;
+}
+.detected-crop {
+  display: none;
+  margin: 0 auto 10px auto;
+  padding: 0;
+  border-radius: 6px;
+  background-color: #111;
+}
+#detected-message {
+  text-align: left;
+}
+.x-mark {
+  color: #C00;
+}
+@media (max-width: 359px) {
+  .detected-dialog {
+    width: 97%;
+    padding: 8px;
+  }
+  .detected-cell {
+    padding: 4px;
+  }
+}
+.detected-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 0;
+}
+.detected-cell {
+  position: relative;
+  min-width: 0;
+  padding: 4px 6px;
+  text-align: left;
+  border: 1px solid #CCC;
+  border-radius: 8px;
+}
+.detected-name {
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
+  color: #444;
+}
+.detected-score-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0;
+}
+.detected-score {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+.detected-score.score-check {
+  padding: 0 3px;
+  border: 2px solid orange;
+  border-radius: 4px;
+}
+.clear-score {
+  flex-shrink: 0;
+  width: 36px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #C00;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.detected-grid.reordering .detected-cell {
+  cursor: pointer;
+  border: 2px dashed #0275D8;
+}
+.detected-grid.reordering .detected-cell.tapped {
+  border-style: solid;
+  background-color: #E8F1FB;
+}
+.order-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  line-height: 24px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: white;
+  background-color: #0275D8;
+  border-radius: 50%;
+}
+.detected-grid.picking .detected-cell {
+  cursor: pointer;
+  border: 2px dashed #0275D8;
+}
+.detected-single {
+  display: none;
+  position: relative;
+  margin-bottom: 10px;
+  padding: 8px 0;
+  text-align: center;
+}
+.detected-single-name {
+  padding: 0;
+  font-size: 1.2rem;
+  color: #444;
+}
+.detected-digits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 8px;
+  margin-top: 8px;
+  padding: 0;
+}
+.digit-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0;
+}
+.digit-box {
+  width: 40px;
+  height: 52px;
+  padding: 0;
+  font-size: 1.7rem;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  color: #222;
+  background-color: white;
+  border: 2px solid #BBB;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.digit-box.selected {
+  border-color: #0275D8;
+  background-color: #E8F1FB;
+  box-shadow: 0 0 0 2px #0275D8;
+}
+.digit-sep {
+  width: 12px;
+  padding: 0;
+  font-size: 1.6rem;
+  font-weight: bold;
+  line-height: 1;
+  text-align: center;
+  color: #444;
+}
+.digits-empty {
+  padding: 0;
+  font-size: 1.7rem;
+  font-weight: bold;
+}
+.digit-controls {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, 4vw, 18px);
+  margin-top: 14px;
+  padding: 0;
+}
+.digit-control {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  font-size: 1.6rem;
+  font-weight: bold;
+  line-height: 1;
+  color: #222;
+  background-color: #F2F2F2;
+  border: 1px solid #999;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.digit-control.digit-delete {
+  color: #C00;
+}
+.digit-control.digit-insert {
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+}
+.digit-control:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.detected-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+}
+.detected-credit {
+  margin: 12px 0 0 0;
+  font-size: 0.8rem;
+  color: #666;
+}
