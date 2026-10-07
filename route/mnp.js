@@ -6,6 +6,11 @@ const config = require('../config');
 const DATA_FOLDER = config.DATA_FOLDER;
 const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
+//A one-time message for the match page (e.g. why a confirm didn't work), kept
+//in a short-lived cookie across the redirect and cleared once shown.
+const FLASH_COOKIE = 'mnp_flash';
+const FLASH_MAX_AGE_MS = 60 * 1000;
+
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
 
@@ -181,6 +186,16 @@ router.post('/matches/:match_id/confirm',function(req,res) {
 console.log("POST /matches CONFIRM...");
 console.log(req.body);
   var match = matches.get(req.params.match_id);
+  if(!match) { return res.redirect('/matches'); }
+  var matchUrl = '/matches/' + req.params.match_id;
+  if(!req.user.key) {
+    flashError(res, "Log in to confirm.");
+    return res.redirect(matchUrl);
+  }
+  if(!req.body.left && !req.body.right) {
+    flashError(res, "Choose which team to confirm for.");
+    return res.redirect(matchUrl);
+  }
 
   var side = false;
 
@@ -195,8 +210,11 @@ console.log(req.body);
       ukey: req.user.key,
       side: side
     }, function(err,m) {
-      if(err) console.log(err);
-      res.redirect('/matches/' +req.params.match_id);
+      if(err) {
+        console.log(err);
+        flashError(res, err);
+      }
+      res.redirect(matchUrl);
     });
   }
   else {
@@ -210,8 +228,11 @@ console.log(req.body);
       ukey: req.user.key,
       side: side
     }, function(err,m) {
-      if(err) console.log(err);
-      res.redirect('/matches/' +req.params.match_id);
+      if(err) {
+        console.log(err);
+        flashError(res, err);
+      }
+      res.redirect(matchUrl);
     });
   }
 });
@@ -223,13 +244,21 @@ router.post('/matches/:match_id/ready',function(req,res) {
   if(!match) { return res.redirect('/matches'); }
 
   var ukey = req.user.key;
+  var matchUrl = '/matches/' + req.params.match_id;
+  if(!ukey) {
+    flashError(res, "Log in to set your lineup.");
+    return res.redirect(matchUrl);
+  }
 
   match.teamReady({
     side: req.body.team,
     ukey: req.user.key
   },function(err,m) {
-    if(err) console.log(err);
-    res.redirect('/matches/' +req.params.match_id);
+    if(err) {
+      console.log(err);
+      flashError(res, err);
+    }
+    res.redirect(matchUrl);
   });
 
 });
@@ -575,9 +604,22 @@ router.get('/matches/:match_id',function(req,res) {
   res.send(renderMatch({
     match: match,
     ukey: ukey,
-    round: round
+    round: round,
+    error: takeFlash(req, res)
   }));
 });
+
+function flashError(res, message) {
+  res.cookie(FLASH_COOKIE, message, { maxAge: FLASH_MAX_AGE_MS, httpOnly: true, sameSite: 'lax' });
+}
+
+//The pending flash message, if any; it's cleared so a reload doesn't repeat it.
+function takeFlash(req, res) {
+  var message = req.cookies && req.cookies[FLASH_COOKIE];
+  if(!message) return null;
+  res.clearCookie(FLASH_COOKIE);
+  return message;
+}
 
 function expectedBonus(lineup) {
   if(lineup.length == 9) {
@@ -809,6 +851,7 @@ function renderMatch(params) {
   var html = mustache.render(base, {
     title: 'Match',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
+    error: params.error, //why the last confirm or lineup step didn't work, shown once
     match: match, //TODO: Some params need to be calc'd, but most stuff is in match.
     name: match.name || match.key,
     venue: venue.name,

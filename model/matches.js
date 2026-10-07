@@ -586,16 +586,16 @@ Match.prototype = {
     var vs;
     if(side == 'away') { team = this.away; vs = this.home; }
     if(side == 'home') { team = this.home; vs = this.away; }
-    if(!team) { return callback("ERROR: Side not found: " +side); }
+    if(!team) { return callback("Choose which team's lineup to confirm."); }
 
     var auth = isAuth(ukey,team.captains);
-    if(!auth) { return callback("ERROR: " +ukey+ " not authorized to confirm opponent's lineup."); }
+    if(!auth) { return callback("Only a captain of " +team.name+ " can confirm the " +vs.name+ " lineup."); }
 
     var name = CONST.ROOT; //Default for the only one who isn't a captain here.
     var cap = listGet(team.captains,ukey);
     if(cap) name = cap.name;
     //The captain from {{side}} is confirming {{vs}} lineup.
-    if(!vs.ready) { return callback("ERROR: Opponent's lineup is not ready to be confirmed."); }
+    if(!vs.ready) { return callback("The " +vs.name+ " lineup isn't ready to be confirmed yet."); }
     vs.confirmed = {
       by: name,
       at: Date.now()
@@ -620,10 +620,10 @@ Match.prototype = {
     var vs;
     if(side == 'away') { team = this.away; vs = this.home; }
     if(side == 'home') { team = this.home; vs = this.away; }
-    if(!team) { return callback("ERROR: Side not found: " +side); }
+    if(!team) { return callback("Choose which team's lineup to set."); }
 
     var auth = isAuth(ukey,team.captains);
-    if(!auth) { return callback("ERROR: " +ukey+ " not authorized to set lineup."); }
+    if(!auth) { return callback("Only a captain of " +team.name+ " can set its lineup."); }
 
     //TODO: Is the team in question actually ready to be ready?
 
@@ -1078,7 +1078,7 @@ Match.prototype = {
           };
         }
         else {
-          return callback("ERROR: Not a left captain");
+          return callback("Only a captain of " +left.name+ " can confirm for " +left.name+ ".");
         }
       }
       else if(side == 'right') {
@@ -1094,13 +1094,13 @@ Match.prototype = {
           };
         }
         else {
-          return callback("ERROR: Not a right captain");
+          return callback("Only a captain of " +right.name+ " can confirm for " +right.name+ ".");
         }
       }
     }
     else {
       //No, this round cannot yet be confirmed.
-      return callback("ERROR: Round is not ready to be confirmed.");
+      return callback("This round can't be confirmed until all of its scores are entered.");
     }
     if(round.left_confirmed && round.right_confirmed) {
       //console.log("Round has been mutually confirmed!");
