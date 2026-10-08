@@ -682,13 +682,6 @@ function lineupTiming(match) {
   }) };
 }
 
-//"Picking @" time for round n: when picking became possible (see
-//roundReadyAt), or null until then.
-function readyAt(match, n) {
-  var ready = roundReadyAt(match, n);
-  return ready ? clockTime(ready) : null;
-}
-
 //Timing for round n: each team's time picking, responding, playing and
 //confirming scores (blank for steps that haven't happened or that the team
 //doesn't do this round), and the time of day the team confirmed the round's
@@ -959,6 +952,9 @@ function renderMatch(params) {
   }
 
   var head = fs.readFileSync('./template/match_head.html').toString();
+  var timing = fs.readFileSync('./template/match_timing.html').toString();
+  var lineupTimes = round.n == 1 ? lineupTiming(match) : null;
+  var roundTimes = roundTiming(match, round.n);
 
   var points = match.getPoints();
 
@@ -985,9 +981,9 @@ function renderMatch(params) {
     title: 'Match',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
     error: params.error, //why the last confirm or lineup step didn't work, shown once
-    lineup_timing: round.n == 1 ? lineupTiming(match) : null, //lineup table, round 1 only
-    ready_at: readyAt(match, round.n),
-    round_timing: roundTiming(match, round.n),
+    lineup_timing: lineupTimes, //lineup table, round 1 only
+    round_timing: roundTimes,
+    has_timing: !!(lineupTimes || roundTimes), //anything for the timing section at the bottom
     match: match, //TODO: Some params need to be calc'd, but most stuff is in match.
     name: match.name || match.key,
     venue: venue.name,
@@ -1004,6 +1000,7 @@ function renderMatch(params) {
     doubles: (num == 4),
     shared: round.n == 5, //ROUND, using again.
     machines: JSON.stringify(venue.machines),
+    referenceTime: match.state_at, //when the current step began (picking/responding Timer)
     lineup: JSON.stringify(lineup),
     editable: editable,
     canAdd: ukey == CONST.ROOT,
@@ -1045,6 +1042,7 @@ function renderMatch(params) {
     rounds: points.rounds
   }, {
     head: head,
+    timing: timing,
     content: template
   });
 

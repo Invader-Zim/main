@@ -1,7 +1,8 @@
 /*
-   Live counters in the match timing grids (template/match_head.html), so
-   captains can see how long the step in progress is taking: picking,
-   responding, and confirming lineups and scores.
+   Live counters on the match pages, so captains can see how long the step in
+   progress is taking: the Timer line on the picking and responding pages, and
+   the timing grids (template/match_head.html) for picking, responding, and
+   confirming lineups and scores.
 
    Each <span class="elapsed" data-since="ms"> shows the time since then as
    m:ss, updated every second.

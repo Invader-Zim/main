@@ -257,7 +257,6 @@ margin-left: 7px;
 }
 .timing-round {
   grid-template-columns: repeat(6, auto);
-  margin-top: 0;
 }
 .timing > span {
   box-sizing: content-box;
@@ -295,10 +294,6 @@ margin-left: 7px;
 .round-line {
   padding: 0;
 }
-.venue-line {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  column-gap: 10px;
+.match-timing {
   padding: 0;
 }

@@ -6,6 +6,7 @@
 <!-- {{role}} -->
 <b>Responding: {{team_name}}</b>
 <br>
+<b>Timer: <span class="elapsed" data-since="{{referenceTime}}"></span></b><br>
 
 {{#editable}}
 <form action="/matches/{{key}}/picks" method="POST">
@@ -24,6 +25,8 @@
 </center>
 </form>
 {{/editable}}
+
+{{> timing}}
 
 <script src="/timer.js"></script>
 
