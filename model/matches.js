@@ -171,6 +171,21 @@ function listFind(list,query) { //TODO: callback
   return null;
 }
 
+//Records when a match step happened (Date.now(), like state_at) in
+//obj.metrics, where obj is the match or one of its rounds:
+//stampMetric(match, 'set', 'home') sets match.metrics.set.home, and
+//stampMetric(round, 'picked') sets round.metrics.picked.
+function stampMetric(obj, name, side) {
+  if(!obj.metrics) obj.metrics = {};
+  if(side) {
+    if(!obj.metrics[name]) obj.metrics[name] = {};
+    obj.metrics[name][side] = Date.now();
+  }
+  else {
+    obj.metrics[name] = Date.now();
+  }
+}
+
 function listGet(list,key) {
   if(!key || !list) return null;
   for(i in list) {
@@ -601,6 +616,7 @@ Match.prototype = {
       at: Date.now()
     };
     console.log("Confirmed: " +vs.name+ " by " +ukey);
+    stampMetric(this, 'confirm', side);
 
     if(team.confirmed && team.ready) {
       //It's time for the match to move on to playing!
@@ -628,6 +644,7 @@ Match.prototype = {
     //TODO: Is the team in question actually ready to be ready?
 
     team.ready = true;
+    stampMetric(this, 'set', side);
     this.save();
     if(callback) callback(null, this);
   },
@@ -808,10 +825,14 @@ Match.prototype = {
         console.log("state:",this.state,"picksReady:",picksReady);
 
         if(this.state == CONST.PICKING) {
-          if(picksReady) this.setState(CONST.RESPONDING);
+          if(picksReady) {
+            stampMetric(this.getRound(), 'picked');
+            this.setState(CONST.RESPONDING);
+          }
         }
         else if(this.state == CONST.RESPONDING) {
           if(picksReady) {
+            stampMetric(this.getRound(), 'responded');
             this.setState(CONST.PLAYING);
           }
         }
@@ -1033,7 +1054,18 @@ Match.prototype = {
       game.score_24 = 0;
     }
 
-    if(roundDone(round)) {
+    var done = roundDone(round);
+    //Timing for the round in play: the score confirmations just cleared above,
+    //and when its last game was entered. (Scores can be changed but not
+    //removed, so a finished round stays finished.)
+    if(r == this.round && this.state == CONST.PLAYING) {
+      if(round.metrics) delete round.metrics.confirmed;
+      if(done && !(round.metrics && round.metrics.completed)) {
+        stampMetric(round, 'completed');
+      }
+    }
+
+    if(done) {
       //Check to see if the match is done?
       // if(r == this.round) {
       //   this.setState(CONST.REVIEWING);
@@ -1076,6 +1108,7 @@ Match.prototype = {
               return Date.now() - this.at;
             }
           };
+          stampMetric(round, 'confirmed', left === this.home ? 'home' : 'away');
         }
         else {
           return callback("Only a captain of " +left.name+ " can confirm for " +left.name+ ".");
@@ -1092,6 +1125,7 @@ Match.prototype = {
               return Date.now() - this.at;
             }
           };
+          stampMetric(round, 'confirmed', right === this.home ? 'home' : 'away');
         }
         else {
           return callback("Only a captain of " +right.name+ " can confirm for " +right.name+ ".");

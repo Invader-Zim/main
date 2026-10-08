@@ -11,6 +11,12 @@ const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 const FLASH_COOKIE = 'mnp_flash';
 const FLASH_MAX_AGE_MS = 60 * 1000;
 
+//Match timing (match.metrics and round.metrics, see model/matches.js): clock
+//times are shown in the league's time zone, durations as m:ss.
+const LEAGUE_TIME_ZONE = 'America/Los_Angeles';
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const NO_TIME = '—';
 //A player key (sha1 hex) shown in place of a name is cut to its last digits.
 const PLAYER_KEY_PATTERN = /^[0-9a-f]{40}$/;
 const SHORT_KEY_LENGTH = 10;
@@ -613,6 +619,108 @@ router.get('/matches/:match_id',function(req,res) {
   }));
 });
 
+//"7:42:10 PM" in the league's time zone, or a dash if it hasn't happened.
+function clockTime(t) {
+  if(!t) return NO_TIME;
+  return new Date(t).toLocaleTimeString('en-US', {
+    timeZone: LEAGUE_TIME_ZONE, hour: 'numeric', minute: '2-digit', second: '2-digit'
+  });
+}
+
+//"m:ss" from one time to a later one (minutes can pass 59); blank if either
+//hasn't happened.
+function duration(from, to) {
+  if(!from || !to || to < from) return '';
+  var seconds = Math.round((to - from) / MS_PER_SECOND);
+  var s = seconds % SECONDS_PER_MINUTE;
+  return Math.floor(seconds / SECONDS_PER_MINUTE) + ':' + (s < 10 ? '0' : '') + s;
+}
+
+//The later of two times, or null until both have happened.
+function laterOf(a, b) {
+  return (a && b) ? Math.max(a, b) : null;
+}
+
+function otherSide(side) {
+  return side == 'away' ? 'home' : 'away';
+}
+
+//When round n became ready to pick: when the second team confirmed, i.e. the
+//later lineup confirmation for round 1, and for later rounds the later score
+//confirmation of the round before.
+function roundReadyAt(match, n) {
+  if(n == 1) {
+    var lineups = match.metrics && match.metrics.confirm;
+    return lineups ? laterOf(lineups.away, lineups.home) : null;
+  }
+  var prev = match.getRound(n - 1);
+  var scores = prev && prev.metrics && prev.metrics.confirmed;
+  return scores ? laterOf(scores.away, scores.home) : null;
+}
+
+//Lineup timing rows for the match page, one per team's lineup: when the team
+//set it, when the opponent confirmed it (metrics.confirm[opponent]), and the
+//time between. In pregame, a lineup still waiting for confirmation counts up
+//live from tookSince. Null for matches without timing.
+function lineupTiming(match) {
+  var m = match.metrics;
+  if(!m) return null;
+  var set = m.set || {};
+  var confirm = m.confirm || {};
+  return { rows: ['away', 'home'].map(function(side) {
+    var confirmedAt = confirm[otherSide(side)];
+    var took = duration(set[side], confirmedAt);
+    var live = !took && set[side] && match.state == CONST.PREGAME;
+    return {
+      side: side,
+      team: match[side].key,
+      start: clockTime(set[side]),
+      confirmed: clockTime(confirmedAt),
+      took: took || NO_TIME,
+      tookSince: live ? set[side] : null
+    };
+  }) };
+}
+
+//"Picking @" time for round n: when picking became possible (see
+//roundReadyAt), or null until then.
+function readyAt(match, n) {
+  var ready = roundReadyAt(match, n);
+  return ready ? clockTime(ready) : null;
+}
+
+//Timing for round n: each team's time picking, responding, playing and
+//confirming scores (blank for steps that haven't happened or that the team
+//doesn't do this round), and the time of day the team confirmed the round's
+//scores. Picking starts when the round became ready (see roundReadyAt). While
+//the round's scores are being confirmed, a team that hasn't confirmed yet
+//counts up live from confirmSince. Null until ready.
+function roundTiming(match, n) {
+  var ready = roundReadyAt(match, n);
+  var round = match.getRound(n);
+  if(!ready || !round) return null;
+  var m = round.metrics || {};
+  var confirmed = m.confirmed || {};
+  var order = match.getOrder(n) || [];
+  var confirming = m.completed && match.state == CONST.PLAYING && n == match.round;
+  return {
+    rows: ['away', 'home'].map(function(side) {
+      var team = match[side];
+      var confirm = duration(m.completed, confirmed[side]);
+      return {
+        side: side,
+        team: team.key,
+        pick: team === order[0] ? duration(ready, m.picked) : '',
+        respond: team === order[1] ? duration(m.picked, m.responded) : '',
+        play: duration(m.responded, m.completed),
+        confirm: confirm,
+        confirmSince: (!confirm && confirming) ? m.completed : null,
+        completed: confirmed[side] ? clockTime(confirmed[side]) : ''
+      };
+    })
+  };
+}
+
 //Who confirmed a round's scores, for the page. Someone confirming who isn't
 //on the team's captain list is stored by player key; show only its end.
 function confirmedForDisplay(confirmed) {
@@ -867,6 +975,9 @@ function renderMatch(params) {
     title: 'Match',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
     error: params.error, //why the last confirm or lineup step didn't work, shown once
+    lineup_timing: round.n == 1 ? lineupTiming(match) : null, //lineup table, round 1 only
+    ready_at: readyAt(match, round.n),
+    round_timing: roundTiming(match, round.n),
     match: match, //TODO: Some params need to be calc'd, but most stuff is in match.
     name: match.name || match.key,
     venue: venue.name,

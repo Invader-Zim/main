@@ -65,6 +65,27 @@
 </tr>
 
 </table>
-Venue: <a href="/matches/{{key}}/venue">{{venue}}</a>
+<div class="venue-line">
+<span>Venue: <a href="/matches/{{key}}/venue">{{venue}}</a></span>
+{{#ready_at}}<span>Picking @ {{ready_at}}</span>{{/ready_at}}
+</div>
+{{#lineup_timing}}
+<div class="timing timing-lineup">
+  <span class="timing-head">Teams</span><span class="timing-head timing-num timing-clock">Lineup set</span><span class="timing-head timing-num timing-clock">Confirmed</span><span class="timing-head timing-num">Elapsed</span>
+{{#rows}}
+  <span class="timing-team timing-{{side}}">{{team}}</span><span class="timing-num timing-clock timing-{{side}}">{{start}}</span><span class="timing-num timing-clock timing-{{side}}">{{confirmed}}</span><span class="timing-num timing-{{side}}">{{#tookSince}}<span class="elapsed" data-format="m:ss" data-since="{{tookSince}}"></span>{{/tookSince}}{{^tookSince}}{{took}}{{/tookSince}}</span>
+{{/rows}}
+</div>
+{{/lineup_timing}}
 <hr>
-{{#round}}<b>Round: {{.}}</b><br>{{/round}}
+<div class="round-line">
+{{#round}}<b>Round: {{.}}</b>{{/round}}
+</div>
+{{#round_timing}}
+<div class="timing timing-round">
+  <span class="timing-head">Teams</span><span class="timing-head timing-num">Pick</span><span class="timing-head timing-num">Respond</span><span class="timing-head timing-num">Play</span><span class="timing-head timing-num">Confirm</span><span class="timing-head timing-num timing-clock">Completed</span>
+{{#rows}}
+  <span class="timing-team timing-{{side}}">{{team}}</span><span class="timing-num timing-{{side}}">{{pick}}</span><span class="timing-num timing-{{side}}">{{respond}}</span><span class="timing-num timing-{{side}}">{{play}}</span><span class="timing-num timing-{{side}}">{{#confirmSince}}<span class="elapsed" data-format="m:ss" data-since="{{confirmSince}}"></span>{{/confirmSince}}{{^confirmSince}}{{confirm}}{{/confirmSince}}</span><span class="timing-num timing-clock timing-{{side}}">{{completed}}</span>
+{{/rows}}
+</div>
+{{/round_timing}}
