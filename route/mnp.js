@@ -11,6 +11,10 @@ const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 const FLASH_COOKIE = 'mnp_flash';
 const FLASH_MAX_AGE_MS = 60 * 1000;
 
+//A player key (sha1 hex) shown in place of a name is cut to its last digits.
+const PLAYER_KEY_PATTERN = /^[0-9a-f]{40}$/;
+const SHORT_KEY_LENGTH = 10;
+
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
 
@@ -609,6 +613,17 @@ router.get('/matches/:match_id',function(req,res) {
   }));
 });
 
+//Who confirmed a round's scores, for the page. Someone confirming who isn't
+//on the team's captain list is stored by player key; show only its end.
+function confirmedForDisplay(confirmed) {
+  if(!confirmed) return confirmed;
+  var by = confirmed.by;
+  if(typeof by == 'string' && PLAYER_KEY_PATTERN.test(by)) {
+    by = by.slice(-SHORT_KEY_LENGTH);
+  }
+  return { by: by, at: confirmed.at };
+}
+
 function flashError(res, message) {
   res.cookie(FLASH_COOKIE, message, { maxAge: FLASH_MAX_AGE_MS, httpOnly: true, sameSite: 'lax' });
 }
@@ -898,8 +913,8 @@ function renderMatch(params) {
     finished: state == CONST.PLAYING && round.done,
     isLeftCaptain: left.hasCaptain(ukey),
     isRightCaptain: right.hasCaptain(ukey),
-    left_confirmed: round.left_confirmed,
-    right_confirmed: round.right_confirmed,
+    left_confirmed: confirmedForDisplay(round.left_confirmed),
+    right_confirmed: confirmedForDisplay(round.right_confirmed),
     errors: errors,
     // TODO: sugs can almost certainly be removed from here, because I'm
     // pretty sure it's not used in any of the templates in this route.
