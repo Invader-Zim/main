@@ -11,13 +11,15 @@
 {{/rows}}
 </div>
 {{/lineup_timing}}
-{{#round_timing}}
+{{#round_tables}}
+{{#caption}}<div class="timing-caption">{{caption}}</div>{{/caption}}
+{{#began}}<div class="timing-began">Round began at {{began}}</div>{{/began}}
 <div class="timing timing-round">
   <span class="timing-head">Teams</span><span class="timing-head timing-num">Pick</span><span class="timing-head timing-num">Respond</span><span class="timing-head timing-num">Play</span><span class="timing-head timing-num">Confirm</span><span class="timing-head timing-num timing-clock">Completed</span>
 {{#rows}}
   <span class="timing-team timing-{{side}}">{{team}}</span><span class="timing-num timing-{{side}}">{{#pickSince}}<span class="elapsed" data-since="{{pickSince}}"></span>{{/pickSince}}{{^pickSince}}{{pick}}{{/pickSince}}</span><span class="timing-num timing-{{side}}">{{#respondSince}}<span class="elapsed" data-since="{{respondSince}}"></span>{{/respondSince}}{{^respondSince}}{{respond}}{{/respondSince}}</span><span class="timing-num timing-{{side}}">{{play}}</span><span class="timing-num timing-{{side}}">{{#confirmSince}}<span class="elapsed" data-since="{{confirmSince}}"></span>{{/confirmSince}}{{^confirmSince}}{{confirm}}{{/confirmSince}}</span><span class="timing-num timing-clock timing-{{side}}">{{completed}}</span>
 {{/rows}}
 </div>
-{{/round_timing}}
+{{/round_tables}}
 </div>
 {{/has_timing}}

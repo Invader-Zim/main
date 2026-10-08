@@ -297,3 +297,12 @@ margin-left: 7px;
 .match-timing {
   padding: 0;
 }
+.timing-began,
+.timing-caption {
+  padding: 0;
+  font-size: 0.8rem;
+}
+.timing-caption {
+  margin-top: 10px;
+  font-weight: bold;
+}

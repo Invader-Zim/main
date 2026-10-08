@@ -17,6 +17,9 @@ const LEAGUE_TIME_ZONE = 'America/Los_Angeles';
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 const NO_TIME = '—';
+//Rounds 1-4 are the regular rounds (round 5, the tie-breaker, isn't played
+//through these pages).
+const LAST_ROUND = 4;
 //A player key (sha1 hex) shown in place of a name is cut to its last digits.
 const PLAYER_KEY_PATTERN = /^[0-9a-f]{40}$/;
 const SHORT_KEY_LENGTH = 10;
@@ -724,6 +727,32 @@ function roundTiming(match, n) {
   };
 }
 
+//The timing tables at the bottom of the page for round n: round 1 shows the
+//lineup table and its round; rounds 2-4 show "Round began at" (when both
+//teams confirmed the round before) and their round. On the last round of a
+//finished match, every table is shown in order instead: lineups, then rounds
+//1-4, each captioned "Round N began at <time>".
+function matchTimingTables(match, n) {
+  if(match.state == CONST.COMPLETE && n == LAST_ROUND) {
+    var rounds = [];
+    for(var r = 1; r <= LAST_ROUND; r++) {
+      var t = roundTiming(match, r);
+      if(t) {
+        var ready = roundReadyAt(match, r);
+        t.caption = 'Round ' + r + (ready ? ' began at ' + clockTime(ready) : '');
+        rounds.push(t);
+      }
+    }
+    return { lineup: lineupTiming(match), rounds: rounds };
+  }
+  var current = roundTiming(match, n);
+  if(current && n > 1) {
+    var began = roundReadyAt(match, n);
+    current.began = began ? clockTime(began) : null;
+  }
+  return { lineup: n == 1 ? lineupTiming(match) : null, rounds: current ? [current] : [] };
+}
+
 //Who confirmed a round's scores, for the page. Someone confirming who isn't
 //on the team's captain list is stored by player key; show only its end.
 function confirmedForDisplay(confirmed) {
@@ -953,8 +982,7 @@ function renderMatch(params) {
 
   var head = fs.readFileSync('./template/match_head.html').toString();
   var timing = fs.readFileSync('./template/match_timing.html').toString();
-  var lineupTimes = round.n == 1 ? lineupTiming(match) : null;
-  var roundTimes = roundTiming(match, round.n);
+  var timingTables = matchTimingTables(match, round.n);
 
   var points = match.getPoints();
 
@@ -981,9 +1009,9 @@ function renderMatch(params) {
     title: 'Match',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
     error: params.error, //why the last confirm or lineup step didn't work, shown once
-    lineup_timing: lineupTimes, //lineup table, round 1 only
-    round_timing: roundTimes,
-    has_timing: !!(lineupTimes || roundTimes), //anything for the timing section at the bottom
+    lineup_timing: timingTables.lineup,
+    round_tables: timingTables.rounds,
+    has_timing: !!(timingTables.lineup || timingTables.rounds.length), //anything for the timing section at the bottom
     match: match, //TODO: Some params need to be calc'd, but most stuff is in match.
     name: match.name || match.key,
     venue: venue.name,
