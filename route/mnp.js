@@ -692,17 +692,25 @@ function readyAt(match, n) {
 //Timing for round n: each team's time picking, responding, playing and
 //confirming scores (blank for steps that haven't happened or that the team
 //doesn't do this round), and the time of day the team confirmed the round's
-//scores. Picking starts when the round became ready (see roundReadyAt). While
-//the round's scores are being confirmed, a team that hasn't confirmed yet
-//counts up live from confirmSince. Null until ready.
+//scores. Picking starts when the round became ready (see roundReadyAt).
+//The step in progress counts up live: the picking team's Pick (pickSince),
+//the responding team's Respond (respondSince), and Confirm for a team that
+//hasn't confirmed the scores yet (confirmSince). For a round already under
+//way before timing was recorded, the current step starts at state_at.
+//Null until the round is ready.
 function roundTiming(match, n) {
-  var ready = roundReadyAt(match, n);
   var round = match.getRound(n);
-  if(!ready || !round) return null;
+  if(!round) return null;
+  var current = n == match.round;
+  var picking = current && match.state == CONST.PICKING;
+  var responding = current && match.state == CONST.RESPONDING;
   var m = round.metrics || {};
+  var ready = roundReadyAt(match, n) || (picking ? match.state_at : null);
+  var picked = m.picked || (responding ? match.state_at : null);
+  if(!ready && !picked) return null;
   var confirmed = m.confirmed || {};
   var order = match.getOrder(n) || [];
-  var confirming = m.completed && match.state == CONST.PLAYING && n == match.round;
+  var confirming = m.completed && current && match.state == CONST.PLAYING;
   return {
     rows: ['away', 'home'].map(function(side) {
       var team = match[side];
@@ -711,7 +719,9 @@ function roundTiming(match, n) {
         side: side,
         team: team.key,
         pick: team === order[0] ? duration(ready, m.picked) : '',
+        pickSince: (team === order[0] && picking) ? ready : null,
         respond: team === order[1] ? duration(m.picked, m.responded) : '',
+        respondSince: (team === order[1] && responding) ? picked : null,
         play: duration(m.responded, m.completed),
         confirm: confirm,
         confirmSince: (!confirm && confirming) ? m.completed : null,
@@ -994,7 +1004,6 @@ function renderMatch(params) {
     doubles: (num == 4),
     shared: round.n == 5, //ROUND, using again.
     machines: JSON.stringify(venue.machines),
-    referenceTime: match.state_at,
     lineup: JSON.stringify(lineup),
     editable: editable,
     canAdd: ukey == CONST.ROOT,
