@@ -1042,6 +1042,9 @@ Match.prototype = {
     //      called, the points and sums are not cleared.
     if(gameDone(game, r)) {
       calcPoints(game, r);
+      //When the completed game was last saved (each save of a complete game
+      //moves it on, so it ends up as the final save). For reports; not shown.
+      game.complete_at = Date.now();
     }
     else {
       game.points_1 = 0;
