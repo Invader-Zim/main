@@ -171,8 +171,10 @@ router.get('/signup',function(req,res) {
 router.post('/signup',function(req,res) {
 
   req.body.timestamp = Date.now();
+  //Tidy the name before it's checked, recorded or used.
+  req.body.name = util.normalizeName(req.body.name);
 
-  if(!req.body.name || req.body.name.trim().length === 0) {
+  if(req.body.name.length === 0) {
     // TODO: Include error on redirect.
     return res.redirect('/signup');
   }

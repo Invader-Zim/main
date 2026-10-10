@@ -181,11 +181,14 @@ module.exports = {
   getByField: function(field,value) {
     console.log('getByField - ' + field + ' / value - ' + value);
     var list = this.all();
-    var check = value.trim().toLowerCase(); //For now only using lower case on values. fields should be known.
+    //Names are compared normalized and without regard to case; other fields
+    //(email) trimmed and without regard to case.
+    var comparable = field == 'name' ? util.nameKey : function(v) { return v.trim().toLowerCase(); };
+    var check = comparable(value);
     for(i in list) {
       var p = list[i];
       console.log('i: ' + i, '  p: ' + p + '  p[field]: ' + p[field]);
-      if(p[field] && isString(p[field]) && p[field].trim().toLowerCase() == check) {
+      if(p[field] && isString(p[field]) && comparable(p[field]) == check) {
         return p;
       }
     }
@@ -227,7 +230,7 @@ module.exports = {
     callback(null, player);
   },
   signup: function(params,callback) {
-    var name = params.name;
+    var name = util.normalizeName(params.name);
     var email = params.email;
     var answerX = params.answerX;
     var dayOfMonth = new Date().getDate();
@@ -249,7 +252,7 @@ module.exports = {
     if (answerX != answerCorrect) {
       console.log("Bogus answer.");
       return callback("Bogus answer");
-    } else if (util.isBannedEmail(email) || isBogusName(name.trim())) {
+    } else if (util.isBannedEmail(email) || isBogusName(name)) {
       console.log("Banned email or name.");
       return callback("Banned email or name"); // don't provide any info
     } else if(!player) {
