@@ -1,11 +1,14 @@
 const IPR = require('./ratings');
+const util = require('../lib/util');
 const { teams } = require('./seasons').get();
 
+// Which team each rostered player plays for. Names are matched without regard
+// to case or spacing (util.nameKey).
 // TODO: Consider making lookup a method instead of constant.
 const lookup = Object.keys(teams).map(tk => teams[tk])
   .reduce((map, team) => {
     team.roster.forEach(p => {
-      map[p.name] = team.key;
+      map[util.nameKey(p.name)] = team.key;
     });
     return map;
   }, {});
@@ -17,7 +20,7 @@ const lookup = Object.keys(teams).map(tk => teams[tk])
  */
 function getSuggestions(teams) {
   const all = IPR.getNames().reduce((set, name) => {
-    set[name] = true;
+    set[util.nameKey(name)] = name;
     return set;
   }, {});
   Object.keys(lookup).forEach(name => {
@@ -30,7 +33,7 @@ function getSuggestions(teams) {
       delete all[name];
     }
   });
-  return Object.keys(all);
+  return Object.keys(all).map(key => all[key]);
 }
 
 module.exports = {

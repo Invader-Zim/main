@@ -4,6 +4,7 @@ const { Router } = require('express');
 const router = Router();
 
 const makeKey = require('../lib/make-key');
+const util = require('../lib/util');
 const venues = require('../model/venues');
 const seasons = require('../model/seasons');
 const matches = require('../model/matches'); //For standings
@@ -24,7 +25,7 @@ const getSuggestions = () => IPR.getNames();
 
 const base = fs.readFileSync('./template/base.html').toString();
 
-const byName = (a,b) => [a.name, b.name].sort()[0] === a.name ? -1 : 1;
+const byName = (a,b) => util.compareNames(a.name, b.name);
 
 const admins = [
   ROOT,
@@ -220,16 +221,19 @@ router.post('/teams/:team_id/roster/add', function(req,res) {
   //  are returning rendered html, that's not as good a model.
   if(!team) { return res.redirect('/teams'); }
 
-  if(!req.body || !req.body.name || !req.body.role) {
+  //Tidy the name before it's compared or stored.
+  const name = util.normalizeName(req.body && req.body.name);
+  const role = req.body && req.body.role;
+
+  if(!name || !role) {
     // TODO: redirect to /teams/:team_id, but with an error msg.
     console.log('Jacked up or missing body');
+    return res.redirect(`/teams/${team.key}`);
   }
 
   // TODO: Do we need to lookup the player in some way?
   //  If the player wasn't in the suggestions, it may be
   //  difficult to validate anyways.
-
-  const { name, role } = req.body;
 
   switch(role) {
     case 'P':
@@ -244,7 +248,7 @@ router.post('/teams/:team_id/roster/add', function(req,res) {
   }
 
   // Is the player already on the team?
-  if(!team.roster.find(p => p.name === name)) {
+  if(!team.roster.find(p => util.sameName(p.name, name))) {
     team.roster.push({ name });
   }
 

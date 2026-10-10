@@ -8,7 +8,8 @@ const { shadows } = require('../lib/auth');
 const findSessions = require('./find-sessions');
 
 const fromName = process.argv[2];
-const toName = process.argv[3];
+// The new name is tidied before it's stored (no stray whitespace).
+const toName = util.normalizeName(process.argv[3]);
 const DATA_FOLDER = require('../config').DATA_FOLDER;
 
 if(!fromName || !toName) {

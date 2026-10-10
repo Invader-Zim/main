@@ -452,7 +452,8 @@ Match.prototype = {
 
     if(!auth) { return callback("ERR: " +ukey+ " not authorized to add players"); }
     var want_captain = params.want_captain ? true : false;
-    var name = params.name;
+    //Tidy the name before it's looked up or stored.
+    var name = util.normalizeName(params.name);
 
     if(!name || name.length == 0) {
       return callback("ERROR: Cannot add nothing.");
