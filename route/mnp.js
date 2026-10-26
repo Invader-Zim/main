@@ -582,6 +582,7 @@ router.post('/matches/:match_id/players/add',function(req,res) {
 // /mymatch takes the user directly to their most recent match.
 
 router.get('/mymatch', function(req,res) {
+  if (!req.user.key) { return res.redirect('/login?redirect_url=/mymatch'); }
   var ukey = req.user.key || 'ANON';
   var match = matches.uget(ukey);
 
@@ -597,6 +598,7 @@ router.get('/mymatch', function(req,res) {
 // /myteam takes the user directly to their most recent team from stats.
 
 router.get('/myteam', function(req,res) {
+  if (!req.user.key) { return res.redirect('/login?redirect_url=/myteam'); }
   const season = seasons.get();
   var ukey = req.user.key || 'ANON';
   var myTeam = '';
