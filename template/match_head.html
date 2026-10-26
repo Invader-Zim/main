@@ -1,3 +1,6 @@
+{{#error}}
+<div class="alert alert-danger" role="alert">{{error}}</div>
+{{/error}}
 <table class="table">
   <colgroup>
     <col style="width: 54%;">
@@ -64,4 +67,6 @@
 </table>
 Venue: <a href="/matches/{{key}}/venue">{{venue}}</a>
 <hr>
-{{#round}}<b>Round: {{.}}</b><br>{{/round}}
+<div class="round-line">
+{{#round}}<b>Round: {{.}}</b>{{/round}}
+</div>

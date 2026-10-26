@@ -171,6 +171,21 @@ function listFind(list,query) { //TODO: callback
   return null;
 }
 
+//Records when a match step happened (Date.now(), like state_at) in
+//obj.metrics, where obj is the match or one of its rounds:
+//stampMetric(match, 'set', 'home') sets match.metrics.set.home, and
+//stampMetric(round, 'picked') sets round.metrics.picked.
+function stampMetric(obj, name, side) {
+  if(!obj.metrics) obj.metrics = {};
+  if(side) {
+    if(!obj.metrics[name]) obj.metrics[name] = {};
+    obj.metrics[name][side] = Date.now();
+  }
+  else {
+    obj.metrics[name] = Date.now();
+  }
+}
+
 function listGet(list,key) {
   if(!key || !list) return null;
   for(i in list) {
@@ -586,21 +601,22 @@ Match.prototype = {
     var vs;
     if(side == 'away') { team = this.away; vs = this.home; }
     if(side == 'home') { team = this.home; vs = this.away; }
-    if(!team) { return callback("ERROR: Side not found: " +side); }
+    if(!team) { return callback("Choose which team's lineup to confirm."); }
 
     var auth = isAuth(ukey,team.captains);
-    if(!auth) { return callback("ERROR: " +ukey+ " not authorized to confirm opponent's lineup."); }
+    if(!auth) { return callback("Only a captain of " +team.name+ " can confirm the " +vs.name+ " lineup."); }
 
     var name = CONST.ROOT; //Default for the only one who isn't a captain here.
     var cap = listGet(team.captains,ukey);
     if(cap) name = cap.name;
     //The captain from {{side}} is confirming {{vs}} lineup.
-    if(!vs.ready) { return callback("ERROR: Opponent's lineup is not ready to be confirmed."); }
+    if(!vs.ready) { return callback("The " +vs.name+ " lineup isn't ready to be confirmed yet."); }
     vs.confirmed = {
       by: name,
       at: Date.now()
     };
     console.log("Confirmed: " +vs.name+ " by " +ukey);
+    stampMetric(this, 'confirm', side);
 
     if(team.confirmed && team.ready) {
       //It's time for the match to move on to playing!
@@ -620,14 +636,15 @@ Match.prototype = {
     var vs;
     if(side == 'away') { team = this.away; vs = this.home; }
     if(side == 'home') { team = this.home; vs = this.away; }
-    if(!team) { return callback("ERROR: Side not found: " +side); }
+    if(!team) { return callback("Choose which team's lineup to set."); }
 
     var auth = isAuth(ukey,team.captains);
-    if(!auth) { return callback("ERROR: " +ukey+ " not authorized to set lineup."); }
+    if(!auth) { return callback("Only a captain of " +team.name+ " can set its lineup."); }
 
     //TODO: Is the team in question actually ready to be ready?
 
     team.ready = true;
+    stampMetric(this, 'set', side);
     this.save();
     if(callback) callback(null, this);
   },
@@ -808,10 +825,14 @@ Match.prototype = {
         console.log("state:",this.state,"picksReady:",picksReady);
 
         if(this.state == CONST.PICKING) {
-          if(picksReady) this.setState(CONST.RESPONDING);
+          if(picksReady) {
+            stampMetric(this.getRound(), 'picked');
+            this.setState(CONST.RESPONDING);
+          }
         }
         else if(this.state == CONST.RESPONDING) {
           if(picksReady) {
+            stampMetric(this.getRound(), 'responded');
             this.setState(CONST.PLAYING);
           }
         }
@@ -1021,6 +1042,9 @@ Match.prototype = {
     //      called, the points and sums are not cleared.
     if(gameDone(game, r)) {
       calcPoints(game, r);
+      //When the completed game was last saved (each save of a complete game
+      //moves it on, so it ends up as the final save). For reports; not shown.
+      game.complete_at = Date.now();
     }
     else {
       game.points_1 = 0;
@@ -1033,7 +1057,18 @@ Match.prototype = {
       game.score_24 = 0;
     }
 
-    if(roundDone(round)) {
+    var done = roundDone(round);
+    //Timing for the round in play: the score confirmations just cleared above,
+    //and when its last game was entered. (Scores can be changed but not
+    //removed, so a finished round stays finished.)
+    if(r == this.round && this.state == CONST.PLAYING) {
+      if(round.metrics) delete round.metrics.confirmed;
+      if(done && !(round.metrics && round.metrics.completed)) {
+        stampMetric(round, 'completed');
+      }
+    }
+
+    if(done) {
       //Check to see if the match is done?
       // if(r == this.round) {
       //   this.setState(CONST.REVIEWING);
@@ -1076,9 +1111,10 @@ Match.prototype = {
               return Date.now() - this.at;
             }
           };
+          stampMetric(round, 'confirmed', left === this.home ? 'home' : 'away');
         }
         else {
-          return callback("ERROR: Not a left captain");
+          return callback("Only a captain of " +left.name+ " can confirm for " +left.name+ ".");
         }
       }
       else if(side == 'right') {
@@ -1092,15 +1128,16 @@ Match.prototype = {
               return Date.now() - this.at;
             }
           };
+          stampMetric(round, 'confirmed', right === this.home ? 'home' : 'away');
         }
         else {
-          return callback("ERROR: Not a right captain");
+          return callback("Only a captain of " +right.name+ " can confirm for " +right.name+ ".");
         }
       }
     }
     else {
       //No, this round cannot yet be confirmed.
-      return callback("ERROR: Round is not ready to be confirmed.");
+      return callback("This round can't be confirmed until all of its scores are entered.");
     }
     if(round.left_confirmed && round.right_confirmed) {
       //console.log("Round has been mutually confirmed!");

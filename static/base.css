@@ -241,3 +241,68 @@ margin-left: 7px;
 .div-tab {
   cursor: pointer;
 }
+
+/* Match timing (template/match_head.html): lineup and round step times.
+   Duration columns are at least 5ch wide, room for 99:59; clock-time columns
+   at least 10.5ch, room for 12:59:59 PM. */
+.timing {
+  display: grid;
+  padding: 0;
+  justify-content: start;
+  margin: 6px 0;
+  font-size: 0.8rem;
+}
+.timing-lineup {
+  grid-template-columns: repeat(4, auto);
+}
+.timing-round {
+  grid-template-columns: repeat(6, auto);
+}
+.timing > span {
+  box-sizing: content-box;
+  padding: 2px 3px;
+}
+.timing-head {
+  display: flex;
+  align-items: flex-end;
+  font-weight: bold;
+  color: #333;
+  background-color: #D2D2D2;
+}
+.timing-away {
+  background-color: #E4E4E4;
+}
+.timing-home {
+  background-color: #F2F2F2;
+}
+.timing-team {
+  white-space: nowrap;
+}
+.timing-num {
+  min-width: 5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.timing-clock {
+  min-width: 10.5ch;
+}
+.timing-head.timing-num {
+  justify-content: flex-end;
+  white-space: normal;
+}
+.round-line {
+  padding: 0;
+}
+.match-timing {
+  padding: 0;
+}
+.timing-began,
+.timing-caption {
+  padding: 0;
+  font-size: 0.8rem;
+}
+.timing-caption {
+  margin-top: 10px;
+  font-weight: bold;
+}

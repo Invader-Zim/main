@@ -1,24 +1,26 @@
 /*
-   Used by template/picking.html and template/responding.html to implement a
-   timer on the picking and responding pages so that captains will know how
-   long they are taking to choose machines and players.
+   Live counters on the match pages, so captains can see how long the step in
+   progress is taking: the Timer line on the picking and responding pages, and
+   the timing grids (template/match_head.html) for picking, responding, and
+   confirming lineups and scores.
+
+   Each <span class="elapsed" data-since="ms"> shows the time since then as
+   m:ss, updated every second.
 */
-var referenceTime = 0;
+var TIMER_TICK_MS = 1000;
+var MS_PER_SECOND = 1000;
+var SECONDS_PER_MINUTE = 60;
 
-function getElapsedTime() {
-   return formatSeconds(Date.now() - referenceTime);
+function formatMinutes(ms) {
+   var seconds = Math.max(0, Math.floor(ms / MS_PER_SECOND));
+   var s = seconds % SECONDS_PER_MINUTE;
+   return Math.floor(seconds / SECONDS_PER_MINUTE) + ":" + (s < 10 ? "0" : "") + s;
 }
 
-function formatSeconds(s) {
-   return new Date(s).toISOString().substr(11, 8);
-}
-
-function renderElapsedTime(t) {
-   if (t !== undefined) {
-      referenceTime = t
-   }
-   $("span.elapsed").text(getElapsedTime());
-   setTimeout(function() {
-      renderElapsedTime()
-   }, 1000);
+function renderElapsedTime() {
+   $("span.elapsed").each(function() {
+      var since = Number($(this).attr("data-since")) || 0;
+      $(this).text(formatMinutes(Date.now() - since));
+   });
+   setTimeout(renderElapsedTime, TIMER_TICK_MS);
 }
