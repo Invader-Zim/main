@@ -6,6 +6,23 @@ const config = require('../config');
 const DATA_FOLDER = config.DATA_FOLDER;
 const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
+const HTTP_BAD_REQUEST = 400;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
+
+const photos = require('../lib/photos');
+const PHOTO_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const MIME_OCTET_STREAM = 'application/octet-stream';
+
+const scoreService = require('../lib/score-service');
+
+//Parts of the game page's script that template/game.js includes.
+const GAME_PHOTO_UPLOAD_SCRIPT = './template/game-photo-upload.js';
+const GAME_DETECT_SCRIPT = './template/game-detect.js';
+//The Detect Scores popup's styles, added after game.css.
+const GAME_DETECT_STYLE = './template/game-detect.css';
+
 // TODO: This could probably be renamed to matches,
 // or matches should be a folder that includes the parts of this router.
 
@@ -675,6 +692,14 @@ const nameSort = function(a, b) {
   return [a.name, b.name].sort()[0] === a.name ? -1 : 1;
 }
 
+//Venue machines are stored as keys; return a sorted copy, ordered by the
+//name shown to players (labels maps key -> name), ignoring case.
+function sortMachineKeys(keys, labels) {
+  return keys.slice().sort(function(a, b) {
+    return (labels[a] || a).localeCompare(labels[b] || b, undefined, { sensitivity: 'base' });
+  });
+}
+
 //Only need match and ukey for params. Optional: errors
 function renderMatch(params) {
 //console.log(params);
@@ -824,7 +849,7 @@ function renderMatch(params) {
     // singles: ????
     doubles: (num == 4),
     shared: round.n == 5, //ROUND, using again.
-    machines: JSON.stringify(venue.machines),
+    machines: JSON.stringify(sortMachineKeys(venue.machines, labels)),
     referenceTime: match.state_at,
     lineup: JSON.stringify(lineup),
     editable: editable,
@@ -890,7 +915,10 @@ router.get('/games/:key.:round.:n',function(req,res) {
   if(!game) { return res.redirect('/matches/'+req.params.key); }
   var template = fs.readFileSync('./template/game.html').toString();
   var css = fs.readFileSync('./template/game.css').toString();
+  var detectCss = fs.readFileSync(GAME_DETECT_STYLE).toString();
   var script = fs.readFileSync('./template/game.js').toString();
+  var photoUploadScript = fs.readFileSync(GAME_PHOTO_UPLOAD_SCRIPT).toString();
+  var detectScript = fs.readFileSync(GAME_DETECT_SCRIPT).toString();
   var venue = match.venue;
 
   var editable = match.canReport({
@@ -920,7 +948,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
 
   left.lineup.sort(nameSort);
   right.lineup.sort(nameSort);
-  venue.machines.sort(nameSort); // TODO: Move inside venue logic.
+  var sortedMachines = sortMachineKeys(venue.machines, labels);
 
   var left_players = [];
   for(i in left.lineup) {
@@ -939,7 +967,7 @@ router.get('/games/:key.:round.:n',function(req,res) {
     redirect_url: '/games/'+req.params.key+'.'+round+'.'+n,
     title: 'Game',
     playerFN: players.get(ukey) ? players.get(ukey).name.split(' ')[0] : "PLAYER",
-    style: css,
+    style: css + '\n' + detectCss,
     name: match.name,
     key: match.key,
     week: match.week,
@@ -948,7 +976,8 @@ router.get('/games/:key.:round.:n',function(req,res) {
     doubles: (NUM_SCORES[round-1] == 4),
     shared: round == 5,
     game: JSON.stringify(game),
-    machines: JSON.stringify(venue.machines),
+    photo_max_bytes: photos.PHOTO_MAX_BYTES,
+    machines: JSON.stringify(sortedMachines),
     left_players: JSON.stringify(left_players),
     right_players: JSON.stringify(right_players),
     machine: machine,
@@ -958,16 +987,33 @@ router.get('/games/:key.:round.:n',function(req,res) {
     points_24: 0 + (game.points_2 || 0) + (game.points_4 || 0),
     type: GAME_TYPES[round-1],
     editable: editable,
+    //Detect Scores is offered to logged-in players when the score service key works.
+    can_detect: !!req.user.key && scoreService.isAvailable(),
     prev: prev,
     next: next,
     labels: JSON.stringify(labels)
   }, {
     content: template,
-    script: script
+    script: script,
+    //game.js includes these with {{> name}}.
+    game_photo_upload: photoUploadScript,
+    game_detect: detectScript
   });
 
   res.send(html);
 });
+
+//Write an uploaded photo (set on req._photo by middleware/postlog.js) once the
+//request has been validated. Files are named by their sha, so repeats are skipped.
+function savePhoto(photo) {
+  var fn = UPLOADS_FOLDER + '/' + photo.sha;
+  if(util.fileExists(fn)) {
+    console.log("Already have " + fn);
+    return;
+  }
+  fs.writeFileSync(fn, photo.data);
+  console.log(" ... saved " + fn + " " + photo.data.length + " bytes");
+}
 
 router.post('/games/:key.:round.:n/report', function(req,res) {
   console.log("POST /games... ",req.params);
@@ -976,19 +1022,39 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
   var match = matches.get(req.params.key);
   var round = req.params.round;
   var n = req.params.n ? parseInt(req.params.n) : 0;
+  var ukey = req.user.key || 'ANON';
 
   if(!match) {
-    return res.send("Unknown match: "+req.params.key);
+    return res.status(HTTP_NOT_FOUND).send("Unknown match: "+req.params.key+".");
+  }
+  if(!match.getGame(round,n)) {
+    return res.status(HTTP_NOT_FOUND).send("Unknown game: round "+round+" game "+n+".");
+  }
+  if(!match.canReport({ ukey: ukey, round: round, n: n })) {
+    return res.status(HTTP_FORBIDDEN).send("You are not allowed to report scores for this game.");
+  }
+  //Framing for an already-saved photo must be for the photo the page is
+  //showing; someone else may have saved a newer one since the page loaded.
+  //(Older pages don't send photo_id; their framing is applied as before.)
+  if(!req._photo && req.body.photo_rotation !== undefined && req.body.photo_id &&
+     req.body.photo_id != photos.currentPhotoSha(match.getGame(round,n))) {
+    return res.status(HTTP_CONFLICT).send(photos.PHOTO_CHANGED_MESSAGE);
+  }
+  if(req._photo) {
+    if(!req._photo.type) {
+      return res.status(HTTP_BAD_REQUEST).send("Unsupported photo format.");
+    }
+    savePhoto(req._photo);
   }
 
   match.reportScores({
-    ukey:   req.user.key,
+    ukey:   ukey,
     round:  req.params.round,
     n:      req.params.n,
     update: req.body
   }, function(err,m) {
     if(err) {
-      return res.send(err);
+      return res.status(HTTP_BAD_REQUEST).send(err);
     }
     var game = m.getGame(round,n);
 //    res.redirect('/games/'+req.params.key+'.'+req.params.round+'.'+req.params.n);
@@ -996,16 +1062,40 @@ router.post('/games/:key.:round.:n/report', function(req,res) {
   });
 });
 
+//Photos are named by sha1 and never change, so browsers may cache them for good.
 router.get('/pics/:pid',function(req,res) {
-  var filename = UPLOADS_FOLDER + '/' +req.params.pid;
-  console.log("Stephen: " + filename);
-  if(util.fileExists(filename)) {
-    res.sendFile(filename, {});
+  var pid = req.params.pid;
+  var filename = UPLOADS_FOLDER + '/' + pid;
+  if(!photos.PHOTO_ID_PATTERN.test(pid) || !util.fileExists(filename)) {
+    return res.status(HTTP_NOT_FOUND).send("Photo not found.");
   }
-  else {
-    res.send("NOT FOUND");
+  res.set('Cache-Control', PHOTO_CACHE_CONTROL);
+
+  //Older uploads are base64 data-URL text; decode those to the image bytes.
+  var header = readFileHeader(filename, photos.PHOTO_HEADER_BYTES);
+  if(photos.isDataUrl(header)) {
+    var decoded = photos.decodeDataUrl(fs.readFileSync(filename, 'latin1'));
+    if(!decoded) {
+      return res.status(HTTP_NOT_FOUND).send("Photo not found.");
+    }
+    res.type(photos.detectImageType(decoded.buffer) || decoded.mime || MIME_OCTET_STREAM);
+    return res.send(decoded.buffer);
   }
+  res.type(photos.detectImageType(header) || MIME_OCTET_STREAM);
+  res.sendFile(filename);
 });
+
+function readFileHeader(filename, length) {
+  var fd = fs.openSync(filename, 'r');
+  try {
+    var buf = Buffer.alloc(length);
+    var n = fs.readSync(fd, buf, 0, length, 0);
+    return buf.slice(0, n);
+  }
+  finally {
+    fs.closeSync(fd);
+  }
+}
 
 function hasErrors(errors) {
    return (Array.isArray(errors)) ? (errors.length > 0) : errors;
