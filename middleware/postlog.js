@@ -1,6 +1,7 @@
 var express = require('express');
 var fs = require('fs');
 var util = require('../lib/util');
+var photos = require('../lib/photos');
 var matches = require('../model/matches');
 var CONST = require('../constants');
 
@@ -8,7 +9,6 @@ var router = express.Router();
 
 const config = require('../config');
 const DATA_FOLDER = config.DATA_FOLDER;
-const UPLOADS_FOLDER = config.UPLOADS_FOLDER;
 
 //NOTE: By placing this middleware AFTER the users middleware,
 //	all the login, logout, and signup routes will be
@@ -69,17 +69,28 @@ router.post('/*',function(req,res,next) {
   //      them to a cache, and attach the filename to
   //      the req.
 
-  if(req.body.photo_data) {
-    console.log("Saving photo data ...");
-    var x = req.body.photo_data;
-    var sha = util.digest(x);
-    var fn = UPLOADS_FOLDER + '/' +sha;
-    if(!util.fileExists(fn)) {
-      fs.writeFileSync(fn,x);
-      console.log(" ... saved " +fn+ " " +x.length+ " bytes");
-    }
-    else console.log("Already have " +fn);
+  //The photo file is written by the route after it validates the request
+  //(see savePhoto in route/mnp.js), so rejected posts don't leave files.
+  //Photos arrive as raw bytes (multipart, see middleware/photo-upload.js), or
+  //from older pages as a base64 data URL in photo_data, which is decoded here
+  //so everything is stored as raw bytes named by the sha1 of those bytes.
+  var photoBytes = null;
+  if(req.file) {
+    photoBytes = req.file.buffer;
+  }
+  else if(req.body.photo_data && photos.isDataUrl(req.body.photo_data)) {
+    var decoded = photos.decodeDataUrl(req.body.photo_data);
+    photoBytes = decoded ? decoded.buffer : Buffer.alloc(0);
+  }
+  else if(req.body.photo_data) {
+    //Only the server sets photo_data to a sha; ignore anything else a client sends.
+    delete req.body.photo_data;
+  }
+  if(photoBytes) {
+    var sha = util.digest(photoBytes);
+    req._photo = { sha: sha, data: photoBytes, type: photos.detectImageType(photoBytes) };
     req.body.photo_data = sha;
+    console.log("Received photo data ... " + photoBytes.length + " bytes, " + (req._photo.type || "unrecognized type"));
   }
   else console.log("No photo data");
 

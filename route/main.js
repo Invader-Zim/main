@@ -11,6 +11,8 @@ var bodyParser = require('body-parser');
 // TODO: Replace image upload with CF/S3 solution
 
 //HACK: We are accepting images up to 10MB.
+//Photos are now uploaded as multipart (middleware/photo-upload.js). This limit
+//only matters for the old base64 photo_data field and can shrink once that's gone.
 router.use(bodyParser.urlencoded({ limit: 10000000, extended: true }));
 router.use(bodyParser.json());
 
@@ -20,12 +22,15 @@ router.use(bodyParser.json());
 var users = require('./users');
 router.use(users);
 
+// Multipart score reports (raw photo bytes) must be parsed before postlog reads req.body.
+router.post('/games/:game_id/report', require('../middleware/photo-upload'));
 router.use(require('../middleware/postlog'));
 router.use(require('../middleware/logging'));
 
 router.use(require('./users'));
 router.use(require('./venues'));
 router.use(require('./mnp'));
+router.use(require('./detect'));
 router.use(require('./league'));
 router.use(require('./machines'));
 router.use(require('./teams'));
