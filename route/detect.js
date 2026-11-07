@@ -101,7 +101,8 @@ router.post('/games/:key.:round.:n/detect', function(req,res) {
 
   console.log("detect: " + ukey + " " + req.params.key + "." + round + "." + n + " " + JSON.stringify(params));
   var photoBytes = fs.readFileSync(filename);
-  scoreService.recognize(photoBytes, params, function(err, answer) {
+  var lastEvent = null;
+  var detection = scoreService.recognize(photoBytes, params, function(err, answer) {
     if(err) {
       console.log("detect: score service unreachable:", err.message);
       return sendFailure(res, HTTP_BAD_GATEWAY, DETECT_FAILURE_DEFAULT.message);
@@ -122,7 +123,23 @@ router.post('/games/:key.:round.:n/detect', function(req,res) {
     rememberDetection(cacheKey, result);
     sendResult(res, result);
   }, function(event) {
+    lastEvent = event.event;
     sendProgress(res, event);
+  });
+
+  //The page hung up before the answer (its Cancel button, or it went away).
+  //While the server is waiting to retry, or the request is queued at the
+  //service, cancelling upstream gives the queue place back. Once the service
+  //is reading, the read finishes regardless, so keep the result: the next try
+  //for this photo then costs nothing.
+  res.on('close', function() {
+    if(res.writableEnded) return;
+    if(lastEvent == 'reading') {
+      console.log("detect: page left while reading; keeping the result for " + cacheKey);
+      return;
+    }
+    console.log("detect: page left; cancelling the reading for " + ukey);
+    detection.cancel();
   });
 });
 

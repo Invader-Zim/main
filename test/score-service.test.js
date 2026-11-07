@@ -80,15 +80,16 @@ function hang() {
 
 
 // A 200 progress stream: the events, one JSON line each, sent in the given chunks
-// (default one chunk per line). `cut` ends the stream after the chunks as if the
-// connection dropped.
+// (default one chunk per line). The stream then ends, which without a result line
+// looks like a dropped connection, unless `open` keeps it waiting for more.
 function stream(events, options) {
    options = options || {}
    const chunks = options.chunks || events.map(function(e) { return JSON.stringify(e) + '\n' })
    return {
       status: HTTP_OK,
       headers: { 'content-type': EVENT_STREAM_TYPE, 'x-request-id': REQUEST_ID },
-      chunks: chunks
+      chunks: chunks,
+      open: !!options.open
    }
 }
 
@@ -137,7 +138,7 @@ function fakeHttps(answers) {
          onResponse(res)
          const chunks = answer.chunks || [typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body)]
          chunks.forEach(function(chunk) { res.emit('data', chunk) })
-         res.emit('end')
+         if (!answer.open) res.emit('end')
       }
       return req
    }
@@ -629,5 +630,58 @@ describe('a local http:// service', function() {
       assert.equal(http.request.mock.callCount(), 2)
       assert.equal(fake.calls[0].url, LOCAL_URL + '/v1/status')
       assert.ok(fake.attempts()[0].url.startsWith(LOCAL_URL + '/v1/recognize?'))
+   })
+})
+
+
+describe('recognize: cancel', function() {
+
+   test('cancelling during a retry wait sends nothing more and never calls back', function(t) {
+      const { service, fake } = load(t, { answers: [problem(HTTP_SERVICE_UNAVAILABLE, 'busy'), ok()] })
+      const outcome = { called: 0, events: [] }
+      const handle = service.recognize(PHOTO, PARAMS, function() { outcome.called++ }, function(e) { outcome.events.push(e) })
+      assert.equal(outcome.events[0].event, 'retry')
+      handle.cancel()
+      advance(t, RETRY_DEADLINE_MS)
+      assert.equal(fake.attempts().length, 1)
+      assert.equal(outcome.called, 0)
+      assert.equal(outcome.events.length, 1)
+   })
+
+   test('cancelling while an attempt is in flight destroys it and never calls back', function(t) {
+      const { service, fake } = load(t, { answers: [hang(), ok()] })
+      const outcome = { called: 0 }
+      const handle = service.recognize(PHOTO, PARAMS, function() { outcome.called++ })
+      const first = fake.attempts()[0]
+      handle.cancel()
+      assert.equal(first.req.destroyed, true)
+      // The destroyed socket may still report an error; it must not start a retry.
+      first.req.emit('error', Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))
+      advance(t, RETRY_DEADLINE_MS)
+      assert.equal(fake.attempts().length, 1)
+      assert.equal(outcome.called, 0)
+   })
+
+   test('cancelling mid-stream passes no more events on', function(t) {
+      const { service, fake } = load(t, { answers: [stream([QUEUED_2], { open: true })] })
+      const outcome = { called: 0, events: [] }
+      const handle = service.recognize(PHOTO, PARAMS, function() { outcome.called++ }, function(e) { outcome.events.push(e) })
+      assert.deepEqual(outcome.events, [QUEUED_2])
+      handle.cancel()
+      assert.equal(fake.attempts()[0].req.destroyed, true)
+      advance(t, RETRY_DEADLINE_MS)
+      assert.equal(outcome.called, 0)
+      assert.deepEqual(outcome.events, [QUEUED_2])
+   })
+
+   test('cancelling after the answer is a no-op', function(t) {
+      const { service, fake } = load(t, { answers: [ok()] })
+      let called = 0
+      const handle = service.recognize(PHOTO, PARAMS, function() { called++ })
+      assert.equal(called, 1)
+      handle.cancel()
+      handle.cancel()
+      assert.equal(fake.attempts()[0].req.destroyed, undefined)
+      assert.equal(called, 1)
    })
 })

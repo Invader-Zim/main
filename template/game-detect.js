@@ -16,9 +16,10 @@ const MS_PER_SECOND = 1000;
 //Status lines in the Detecting Scores box.
 const DETECTING_MESSAGE = "Detecting Scores";
 const READING_MESSAGE = "Reading the scores";
-const BUSY_MESSAGE = "The request queue is full.";
+const BUSY_MESSAGE = "The queue is full.";
 const UNREACHABLE_MESSAGE = "The score service isn't responding.";
 const RETRYING_MESSAGE = "Retrying";
+const CANCELLED_MESSAGE = "Score detection cancelled.";
 //Readings below this confidence get an orange outline for players to check.
 const DETECT_CHECK_CONFIDENCE = 0.9;
 //Space kept between the detected-scores dialog and the screen edges.
@@ -62,8 +63,19 @@ function detectScores() {
 //  unreachable {retryInSeconds: N} the service didn't answer; the server retries in N seconds
 //  result   {scores, ...}         the reading (also the whole answer when there was no progress)
 //  error    {status, message}     a failure after progress began
+//Cancel (the button in the box) aborts the request; the server then gives up
+//its place with the score service unless the photo is already being read.
+var detectController = null;
+
+function cancelDetection() {
+  if(!detectController) return;
+  detectController.cancelled = true;
+  detectController.abort();
+}
+
 function requestDetection() {
   var controller = new AbortController();
+  detectController = controller;
   var timer = setTimeout(function() { controller.abort(); }, DETECT_TIMEOUT_MS);
   showDetecting(DETECTING_MESSAGE);
   fetch('/games/{{key}}.{{round}}.{{n}}/detect', {
@@ -104,11 +116,17 @@ function requestDetection() {
     });
   }).then(function(result) {
     clearTimeout(timer);
+    detectController = null;
     hideDetecting();
     applyDetectedScores(result);
   }).catch(function(err) {
     clearTimeout(timer);
+    detectController = null;
     hideDetecting();
+    if(controller.cancelled) {
+      setSaveStatus(CANCELLED_MESSAGE, false);
+      return;
+    }
     console.log("... detect failed:", err);
     var reason;
     if(err instanceof DetectError) {
@@ -189,7 +207,7 @@ function hideDetecting() {
   $('#detect-cover').hide();
 }
 
-//Why the server is waiting plus "Retrying in N seconds", counting down once a
+//Why the server is waiting plus "Retrying in N", counting down once a
 //second until the next event.
 var busyTimer = null;
 
@@ -197,7 +215,7 @@ function showRetryCountdown(message, seconds) {
   stopBusyCountdown();
   var left = seconds;
   var show = function() {
-    $('#detect-status').text(message + " Retrying in " + left + (left == 1 ? " second." : " seconds."));
+    $('#detect-status').text(message + " Retrying in " + left + ".");
   };
   show();
   $('#detect-cover').show();
@@ -721,6 +739,7 @@ function escapeDetected() {
 
 return {
   detectScores: detectScores,
+  cancelDetection: cancelDetection,
   acceptDetected: acceptDetected,
   rejectDetected: rejectDetected,
   startReorder: startReorder,
