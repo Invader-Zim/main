@@ -1,5 +1,5 @@
-<!-- Match timing (see lineupTiming/roundTiming in route/mnp.js), at the
-     bottom of each match page. -->
+<!-- Match timing (see lineupTiming/roundTiming/timingTotals in route/mnp.js),
+     at the bottom of each match page. -->
 {{#has_timing}}
 <hr>
 <div id="match-timing" class="match-timing">
@@ -21,5 +21,15 @@
 {{/rows}}
 </div>
 {{/round_tables}}
+{{#timing_totals}}
+<div class="timing-caption">{{caption}}</div>
+<div class="timing timing-totals">
+  <span class="timing-head"></span><span class="timing-head timing-group timing-group-totals">Totals</span><span class="timing-head timing-group timing-group-averages">Averages</span>
+  <span class="timing-head">Teams</span><span class="timing-head timing-num">Pick</span><span class="timing-head timing-num">Respond</span><span class="timing-head timing-num">Combined</span><span class="timing-head timing-num">Pick</span><span class="timing-head timing-num">Respond</span>
+{{#rows}}
+  <span class="timing-team timing-{{side}}">{{team}}</span><span class="timing-num timing-{{side}}">{{pick}}</span><span class="timing-num timing-{{side}}">{{respond}}</span><span class="timing-num timing-{{side}}">{{combined}}</span><span class="timing-num timing-{{side}}">{{avgPick}}</span><span class="timing-num timing-{{side}}">{{avgRespond}}</span>
+{{/rows}}
+</div>
+{{/timing_totals}}
 </div>
 {{/has_timing}}

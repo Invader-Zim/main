@@ -242,9 +242,9 @@ margin-left: 7px;
   cursor: pointer;
 }
 
-/* Match timing (template/match_head.html): lineup and round step times.
-   Duration columns are at least 5ch wide, room for 99:59; clock-time columns
-   at least 10.5ch, room for 12:59:59 PM. */
+/* Match timing (template/match_timing.html): lineup and round step times,
+   and the pick/respond totals. Duration columns are at least 5ch wide, room
+   for 99:59; clock-time columns at least 10.5ch, room for 12:59:59 PM. */
 .timing {
   display: grid;
   padding: 0;
@@ -255,8 +255,20 @@ margin-left: 7px;
 .timing-lineup {
   grid-template-columns: repeat(4, auto);
 }
-.timing-round {
+.timing-round,
+.timing-totals {
   grid-template-columns: repeat(6, auto);
+}
+/* The totals table's first header row groups the columns: Totals over
+   Pick, Respond and Combined; Averages over Pick and Respond. */
+.timing-group {
+  justify-content: center;
+}
+.timing-group-totals {
+  grid-column: span 3;
+}
+.timing-group-averages {
+  grid-column: span 2;
 }
 .timing > span {
   box-sizing: content-box;

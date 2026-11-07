@@ -20,6 +20,9 @@ const NO_TIME = '—';
 //Rounds 1-4 are the regular rounds (round 5, the tie-breaker, isn't played
 //through these pages).
 const LAST_ROUND = 4;
+//The pick/respond totals table starts on round 2 (through round 1 it would
+//only repeat the round 1 table).
+const FIRST_TOTALS_ROUND = 2;
 //A player key (sha1 hex) shown in place of a name is cut to its last digits.
 const PLAYER_KEY_PATTERN = /^[0-9a-f]{40}$/;
 const SHORT_KEY_LENGTH = 10;
@@ -648,13 +651,22 @@ function clockTime(t) {
   });
 }
 
-//"m:ss" from one time to a later one (minutes can pass 59); blank if either
-//hasn't happened.
-function duration(from, to) {
-  if(!from || !to || to < from) return '';
-  var seconds = Math.round((to - from) / MS_PER_SECOND);
+//Whole seconds from one time to a later one; null if either hasn't happened.
+function durationSeconds(from, to) {
+  if(!from || !to || to < from) return null;
+  return Math.round((to - from) / MS_PER_SECOND);
+}
+
+//"m:ss" (minutes can pass 59).
+function formatDuration(seconds) {
   var s = seconds % SECONDS_PER_MINUTE;
   return Math.floor(seconds / SECONDS_PER_MINUTE) + ':' + (s < 10 ? '0' : '') + s;
+}
+
+//"m:ss" from one time to a later one; blank if either hasn't happened.
+function duration(from, to) {
+  var seconds = durationSeconds(from, to);
+  return seconds === null ? '' : formatDuration(seconds);
 }
 
 //The later of two times, or null until both have happened.
@@ -711,7 +723,8 @@ function lineupTiming(match) {
 //the responding team's Respond (respondSince), and Confirm for a team that
 //hasn't confirmed the scores yet (confirmSince). For a round already under
 //way before timing was recorded, the current step starts at state_at.
-//Null until the round is ready.
+//Null until the round is ready or has some time recorded (a round from before
+//pick timing was kept may have only its completion and confirmations).
 function roundTiming(match, n) {
   var round = match.getRound(n);
   if(!round) return null;
@@ -721,7 +734,7 @@ function roundTiming(match, n) {
   var m = round.metrics || {};
   var ready = roundReadyAt(match, n) || (picking ? match.state_at : null);
   var picked = m.picked || (responding ? match.state_at : null);
-  if(!ready && !picked) return null;
+  if(!ready && !picked && !m.responded && !m.completed) return null;
   var confirmed = m.confirmed || {};
   var order = match.getOrder(n) || [];
   var confirming = m.completed && current && match.state == CONST.PLAYING;
@@ -745,12 +758,70 @@ function roundTiming(match, n) {
   };
 }
 
+//Each team's picking and responding over rounds 1 to [through]: total time
+//spent on each step, the two combined, and the average per round the team
+//did that step (normally two picks and two responds over a match), rounded
+//down to the second. Only steps
+//with both ends recorded count -- a pick or response still under way is left
+//out, as is a round without timing. A step a team hasn't done yet shows a
+//dash. Null until some step has been measured; otherwise { caption, rows }.
+function timingTotals(match, through) {
+  var sums = { away: newStepSums(), home: newStepSums() };
+  var measured = false;
+  for(var r = 1; r <= through; r++) {
+    var round = match.getRound(r);
+    var m = round && round.metrics;
+    var order = match.getOrder(r);
+    if(!m || !order) continue;
+    var picker = order[0] === match.away ? 'away' : 'home';
+    var responder = otherSide(picker);
+    var pick = durationSeconds(roundReadyAt(match, r), m.picked);
+    var respond = durationSeconds(m.picked, m.responded);
+    if(pick !== null) { addStep(sums[picker].pick, pick); measured = true; }
+    if(respond !== null) { addStep(sums[responder].respond, respond); measured = true; }
+  }
+  if(!measured) return null;
+  return { caption: 'Picking and responding, rounds 1-' + through, rows: ['away', 'home'].map(function(side) {
+    var steps = sums[side];
+    var combined = steps.pick.seconds + steps.respond.seconds;
+    return {
+      side: side,
+      team: match[side].key,
+      pick: stepTotal(steps.pick),
+      respond: stepTotal(steps.respond),
+      combined: (steps.pick.rounds || steps.respond.rounds) ? formatDuration(combined) : NO_TIME,
+      avgPick: stepAverage(steps.pick),
+      avgRespond: stepAverage(steps.respond)
+    };
+  }) };
+}
+
+function newStepSums() {
+  return { pick: { seconds: 0, rounds: 0 }, respond: { seconds: 0, rounds: 0 } };
+}
+
+function addStep(sum, seconds) {
+  sum.seconds += seconds;
+  sum.rounds++;
+}
+
+function stepTotal(sum) {
+  return sum.rounds ? formatDuration(sum.seconds) : NO_TIME;
+}
+
+//Whole seconds, rounded down (22:23 over two rounds is 11:11).
+function stepAverage(sum) {
+  return sum.rounds ? formatDuration(Math.floor(sum.seconds / sum.rounds)) : NO_TIME;
+}
+
 //The timing tables at the bottom of the page for round n: round 1 shows the
 //lineup table and its round; rounds 2-4 show "Round began at" (when both
 //teams confirmed the round before) and their round. On the last round of a
 //finished match, every table is shown in order instead: lineups, then rounds
-//1-4, each captioned "Round N began at <time>".
+//1-4, each captioned "Round N began at <time>". From round 2 on, the
+//pick/respond totals through round n close the section.
 function matchTimingTables(match, n) {
+  var totals = n >= FIRST_TOTALS_ROUND ? timingTotals(match, n) : null;
   if(match.state == CONST.COMPLETE && n == LAST_ROUND) {
     var rounds = [];
     for(var r = 1; r <= LAST_ROUND; r++) {
@@ -761,14 +832,14 @@ function matchTimingTables(match, n) {
         rounds.push(t);
       }
     }
-    return { lineup: lineupTiming(match), rounds: rounds };
+    return { lineup: lineupTiming(match), rounds: rounds, totals: totals };
   }
   var current = roundTiming(match, n);
   if(current && n > 1) {
     var began = roundReadyAt(match, n);
     current.began = began ? clockTime(began) : null;
   }
-  return { lineup: n == 1 ? lineupTiming(match) : null, rounds: current ? [current] : [] };
+  return { lineup: n == 1 ? lineupTiming(match) : null, rounds: current ? [current] : [], totals: totals };
 }
 
 //Who confirmed a round's scores, for the page. Someone confirming who isn't
@@ -1037,7 +1108,8 @@ function renderMatch(params) {
     error: params.error, //why the last confirm or lineup step didn't work, shown once
     lineup_timing: timingTables.lineup,
     round_tables: timingTables.rounds,
-    has_timing: !!(timingTables.lineup || timingTables.rounds.length), //anything for the timing section at the bottom
+    timing_totals: timingTables.totals,
+    has_timing: !!(timingTables.lineup || timingTables.rounds.length || timingTables.totals), //anything for the timing section at the bottom
     match: match, //TODO: Some params need to be calc'd, but most stuff is in match.
     name: match.name || match.key,
     venue: venue.name,
