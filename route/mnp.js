@@ -1192,8 +1192,9 @@ router.get('/games/:key.:round.:n',function(req,res) {
     points_24: 0 + (game.points_2 || 0) + (game.points_4 || 0),
     type: GAME_TYPES[round-1],
     editable: editable,
-    //Detect Scores is offered to logged-in players when the score service key works.
-    can_detect: !!req.user.key && scoreService.isAvailable(),
+    //Detect Scores goes with Save: only while this player may report the game
+    //(so not once the match is over), and only when the score service key works.
+    can_detect: editable && scoreService.isAvailable(),
     prev: prev,
     next: next,
     labels: JSON.stringify(labels)
