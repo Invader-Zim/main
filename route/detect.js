@@ -27,6 +27,10 @@ const DETECT_LIMIT_PER_WINDOW = 30;
 const DETECT_WINDOW_MS = 60 * 60 * 1000;
 const DETECT_CACHE_MAX = 500;
 const DETECT_POWERED_BY = 'Powered by Flippd Pinball Vision.';
+const EVENT_STREAM_TYPE = 'application/x-ndjson';
+//Statuses the service itself answers when it has no room right now.
+const REFUSAL_STATUSES = [HTTP_TOO_MANY_REQUESTS, HTTP_SERVICE_UNAVAILABLE];
+const MS_PER_SECOND = 1000;
 //Score service status -> what the page is told.
 const DETECT_FAILURE_DEFAULT = { status: HTTP_BAD_GATEWAY, message: "Score detection is unavailable right now." };
 const DETECT_FAILURES = {
@@ -97,27 +101,97 @@ router.post('/games/:key.:round.:n/detect', function(req,res) {
 
   console.log("detect: " + ukey + " " + req.params.key + "." + round + "." + n + " " + JSON.stringify(params));
   var photoBytes = fs.readFileSync(filename);
-  scoreService.recognize(photoBytes, params, function(err, answer) {
+  var lastEvent = null;
+  var detection = scoreService.recognize(photoBytes, params, function(err, answer) {
     if(err) {
       console.log("detect: score service unreachable:", err.message);
-      return res.status(HTTP_BAD_GATEWAY).send("Score detection is unavailable right now.");
+      return sendFailure(res, HTTP_BAD_GATEWAY, DETECT_FAILURE_DEFAULT.message);
     }
     if(answer.status != HTTP_OK) {
       //Log the service's details here; don't pass them to the page.
       console.log("detect: score service " + answer.status + " " + JSON.stringify(answer.body) + " requestId=" + answer.requestId);
       if(answer.status == HTTP_UNSUPPORTED_MEDIA_TYPE) {
         //Name the format, worked out from the photo's own bytes.
-        return res.status(HTTP_UNPROCESSABLE).send("The photo's format (" + storedPhotoFormat(photoBytes) + ") can't be read by score detection.");
+        return sendFailure(res, HTTP_UNPROCESSABLE, "The photo's format (" + storedPhotoFormat(photoBytes) + ") can't be read by score detection.");
       }
       var failure = DETECT_FAILURES[answer.status] || DETECT_FAILURE_DEFAULT;
-      return res.status(failure.status).send(failure.message);
+      return sendFailure(res, failure.status, failure.message);
     }
     var result = detectionResult(answer.body, params.playerCount);
     console.log("detect: requestId=" + answer.requestId + " " + JSON.stringify(result.scores));
+    //Remembered even if the page has gone: its next try then costs nothing.
     rememberDetection(cacheKey, result);
-    res.json(result);
+    sendResult(res, result);
+  }, function(event) {
+    lastEvent = event.event;
+    sendProgress(res, event);
+  });
+
+  //The page hung up before the answer (its Cancel button, or it went away).
+  //While the server is waiting to retry, or the request is queued at the
+  //service, cancelling upstream gives the queue place back. Once the service
+  //is reading, the read finishes regardless, so keep the result: the next try
+  //for this photo then costs nothing.
+  res.on('close', function() {
+    if(res.writableEnded) return;
+    if(lastEvent == 'reading') {
+      console.log("detect: page left while reading; keeping the result for " + cacheKey);
+      return;
+    }
+    console.log("detect: page left; cancelling the reading for " + ukey);
+    detection.cancel();
   });
 });
+
+//Progress while the score service works. The first event turns the response
+//into a stream of events, one JSON object per line (application/x-ndjson),
+//which the page reads as they arrive; until then nothing is committed, so a
+//detection that fails before any progress still gets a plain status. The
+//service's own queue events pass through; this server's retries become
+//"busy" (the service refused for now) or "unreachable" (no answer, or a proxy
+//error in front of it) with the wait in whole seconds.
+function sendProgress(res, event) {
+  if(res.destroyed || res.writableEnded) return;
+  var line;
+  if(event.event == 'queued') {
+    line = { event: 'queued', ahead: event.ahead };
+  }
+  else if(event.event == 'reading') {
+    line = { event: 'reading' };
+  }
+  else if(event.event == 'retry') {
+    var refused = REFUSAL_STATUSES.indexOf(event.status) != -1;
+    line = { event: refused ? 'busy' : 'unreachable', retryInSeconds: Math.ceil(event.waitMs / MS_PER_SECOND) };
+  }
+  else {
+    return;
+  }
+  if(!res.headersSent) {
+    res.status(HTTP_OK);
+    res.set('Content-Type', EVENT_STREAM_TYPE);
+    res.set('Cache-Control', 'no-cache');
+    res.flushHeaders();
+  }
+  res.write(JSON.stringify(line) + "\n");
+}
+
+//The reading: a plain JSON answer, or the stream's last line once progress has been sent.
+function sendResult(res, result) {
+  if(res.destroyed || res.writableEnded) return;
+  if(!res.headersSent) {
+    return res.json(result);
+  }
+  res.end(JSON.stringify(Object.assign({ event: 'result' }, result)) + "\n");
+}
+
+//A failure: the status and message as a plain answer, or as the stream's last line.
+function sendFailure(res, status, message) {
+  if(res.destroyed || res.writableEnded) return;
+  if(!res.headersSent) {
+    return res.status(status).send(message);
+  }
+  res.end(JSON.stringify({ event: 'error', status: status, message: message }) + "\n");
+}
 
 //Format name of a stored photo (older uploads are data-URL text; name the image inside).
 function storedPhotoFormat(bytes) {

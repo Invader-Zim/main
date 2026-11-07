@@ -174,8 +174,11 @@
 <!-- Shown in the same top-center spot while the server reads the scores. -->
 <div id="detect-cover" class="modal-cover">
   <div class="modal-container detect-container">
-    <div class="spinner" aria-hidden="true"></div>
-    <div>Detecting Scores</div>
+    <div class="detect-row">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="detect-status" role="status">Detecting Scores</div>
+    </div>
+    <button type="button" id="detect-cancel-btn" class="btn btn-sm btn-secondary" onclick="DetectScores.cancelDetection();">Cancel</button>
   </div>
 </div>
 

@@ -10,6 +10,16 @@ var DetectScores = (function() {
 const SAVE_REMINDER = "Tap the Save button after making any final edits.";
 //Score detection: the server may wait up to a minute on the score service.
 const DETECT_TIMEOUT_MS = 90000;
+//The server streams progress as one JSON event per line with this type.
+const EVENT_STREAM_TYPE = 'application/x-ndjson';
+const MS_PER_SECOND = 1000;
+//Status lines in the Detecting Scores box.
+const DETECTING_MESSAGE = "Detecting Scores";
+const READING_MESSAGE = "Reading the scores";
+const BUSY_MESSAGE = "The queue is full.";
+const UNREACHABLE_MESSAGE = "The score service isn't responding.";
+const RETRYING_MESSAGE = "Retrying";
+const CANCELLED_MESSAGE = "Score detection cancelled.";
 //Readings below this confidence get an orange outline for players to check.
 const DETECT_CHECK_CONFIDENCE = 0.9;
 //Space kept between the detected-scores dialog and the screen edges.
@@ -45,38 +55,185 @@ function detectScores() {
   }
 }
 
+//Ask the server to read the saved photo. While it works the server may send
+//progress, one JSON event per line, which updates the Detecting Scores box:
+//  queued   {ahead: N}            N requests are ahead of this one at the service
+//  reading                        the service has started on the photo
+//  busy     {retryInSeconds: N}   the service refused for now; the server retries in N seconds
+//  unreachable {retryInSeconds: N} the service didn't answer; the server retries in N seconds
+//  result   {scores, ...}         the reading (also the whole answer when there was no progress)
+//  error    {status, message}     a failure after progress began
+//Cancel (the button in the box) aborts the request; the server then gives up
+//its place with the score service unless the photo is already being read.
+var detectController = null;
+
+function cancelDetection() {
+  if(!detectController) return;
+  detectController.cancelled = true;
+  detectController.abort();
+}
+
 function requestDetection() {
-  $('#detect-cover').show();
-  $.ajax({
-    url: '/games/{{key}}.{{round}}.{{n}}/detect',
+  var controller = new AbortController();
+  detectController = controller;
+  var timer = setTimeout(function() { controller.abort(); }, DETECT_TIMEOUT_MS);
+  showDetecting(DETECTING_MESSAGE);
+  fetch('/games/{{key}}.{{round}}.{{n}}/detect', {
     method: 'POST',
-    data: { photo_id: shownPhotoId() },
-    dataType: 'json',
-    timeout: DETECT_TIMEOUT_MS,
-    success: function(result) {
-      $('#detect-cover').hide();
-      applyDetectedScores(result);
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Requested-With': 'XMLHttpRequest'
     },
-    error: function(xhr, status) {
-      $('#detect-cover').hide();
-      console.log("... detect failed:", status, xhr.status);
-      var reason;
-      if(status == 'timeout') {
-        reason = "It took too long. Try again.";
-      }
-      else if(xhr.status == 0) {
-        reason = "Could not reach the server. Check your connection.";
-      }
-      else if(isPlainMessage(xhr.responseText)) {
-        reason = xhr.responseText;
-      }
-      else {
-        reason = "Server error " + xhr.status + ".";
-      }
-      showFailure();
-      setSaveStatus("Score detection failed: " + reason, true);
+    body: new URLSearchParams({ photo_id: shownPhotoId() }),
+    signal: controller.signal
+  }).then(function(response) {
+    if(!response.ok) {
+      return response.text().then(function(text) {
+        throw new DetectError(isPlainMessage(text) ? text : "Server error " + response.status + ".");
+      });
     }
+    var type = response.headers.get('Content-Type') || '';
+    if(type.indexOf(EVENT_STREAM_TYPE) == -1) {
+      return response.json();
+    }
+    return readEvents(response.body, function(event) {
+      if(event.event == 'queued') {
+        showDetecting(event.ahead > 0 ? queuedMessage(event.ahead) : READING_MESSAGE);
+      }
+      else if(event.event == 'reading') {
+        showDetecting(READING_MESSAGE);
+      }
+      else if(event.event == 'busy') {
+        showRetryCountdown(BUSY_MESSAGE, event.retryInSeconds);
+      }
+      else if(event.event == 'unreachable') {
+        showRetryCountdown(UNREACHABLE_MESSAGE, event.retryInSeconds);
+      }
+    }).then(function(last) {
+      if(!last) throw new DetectError("The server stopped answering. Try again.");
+      if(last.event == 'error') throw new DetectError(last.message);
+      return last;
+    });
+  }).then(function(result) {
+    clearTimeout(timer);
+    detectController = null;
+    hideDetecting();
+    applyDetectedScores(result);
+  }).catch(function(err) {
+    clearTimeout(timer);
+    detectController = null;
+    hideDetecting();
+    if(controller.cancelled) {
+      setSaveStatus(CANCELLED_MESSAGE, false);
+      return;
+    }
+    console.log("... detect failed:", err);
+    var reason;
+    if(err instanceof DetectError) {
+      reason = err.message;
+    }
+    else if(err.name == 'AbortError') {
+      reason = "It took too long. Try again.";
+    }
+    else {
+      reason = "Could not reach the server. Check your connection.";
+    }
+    showFailure();
+    setSaveStatus("Score detection failed: " + reason, true);
   });
+}
+
+//A failure the server described; anything else is the network or the timeout.
+function DetectError(message) {
+  this.message = message;
+}
+
+//Read a stream of JSON events, one per line, calling onEvent for each progress
+//event. Resolves with the last line (a result or error event), or null if the
+//stream ended without one.
+function readEvents(body, onEvent) {
+  var reader = body.getReader();
+  var decoder = new TextDecoder();
+  var pending = '';
+  var last = null;
+
+  function takeLine(line) {
+    if(!line.trim()) return;
+    var event;
+    try {
+      event = JSON.parse(line);
+    }
+    catch(e) {
+      return;
+    }
+    if(event.event == 'result' || event.event == 'error') {
+      last = event;
+    }
+    else {
+      onEvent(event);
+    }
+  }
+
+  function next() {
+    return reader.read().then(function(step) {
+      if(step.done) {
+        takeLine(pending + decoder.decode());
+        return last;
+      }
+      pending += decoder.decode(step.value, { stream: true });
+      var lines = pending.split('\n');
+      pending = lines.pop();
+      lines.forEach(takeLine);
+      return next();
+    });
+  }
+  return next();
+}
+
+//The service counts the request being read as ahead, so 1 means you are up next.
+function queuedMessage(ahead) {
+  return "Request queued, with " + ahead + " ahead of you.";
+}
+
+//The Detecting Scores box with a status line.
+function showDetecting(message) {
+  stopBusyCountdown();
+  $('#detect-status').text(message);
+  $('#detect-cover').show();
+}
+
+function hideDetecting() {
+  stopBusyCountdown();
+  $('#detect-cover').hide();
+}
+
+//Why the server is waiting plus "Retrying in N", counting down once a
+//second until the next event.
+var busyTimer = null;
+
+function showRetryCountdown(message, seconds) {
+  stopBusyCountdown();
+  var left = seconds;
+  var show = function() {
+    $('#detect-status').text(message + " Retrying in " + left + ".");
+  };
+  show();
+  $('#detect-cover').show();
+  busyTimer = setInterval(function() {
+    if(left > 1) {
+      left--;
+      show();
+    }
+    else {
+      stopBusyCountdown();
+      $('#detect-status').text(RETRYING_MESSAGE);
+    }
+  }, MS_PER_SECOND);
+}
+
+function stopBusyCountdown() {
+  clearInterval(busyTimer);
+  busyTimer = null;
 }
 
 //State of the detected-scores popup while it's open. The popup works on its
@@ -582,6 +739,7 @@ function escapeDetected() {
 
 return {
   detectScores: detectScores,
+  cancelDetection: cancelDetection,
   acceptDetected: acceptDetected,
   rejectDetected: rejectDetected,
   startReorder: startReorder,
