@@ -406,23 +406,39 @@ function setupImageController() {
   //puts that point back under the fingers. So a pan follows the finger
   //exactly and a pinch zooms about the point between the fingers.
   var anchor = null;
+  //How many fingers the anchor was taken under: the center is one finger, or
+  //the midpoint of two.
+  var anchorPointers = 0;
+
+  //Anchor the photo point under a preview point, from the saved framing.
+  function anchorAt(point, pointers) {
+    var zoom = previewLayout().fit * adjustScale;
+    anchor = { x: point.x / zoom - adjustDeltaX, y: point.y / zoom - adjustDeltaY };
+    anchorPointers = pointers;
+  }
 
   //pan and pinch can both start during one gesture; anchor once, from the
   //framing before the gesture and where the fingers first touched.
   mc.on("panstart pinchstart", function (ev) {
     if(anchor || !imgElm || !imgElm.naturalWidth) return;
-    var zoom = previewLayout().fit * adjustScale;
-    var start = canvasPoint(ev.center.x - ev.deltaX, ev.center.y - ev.deltaY);
-    anchor = { x: start.x / zoom - adjustDeltaX, y: start.y / zoom - adjustDeltaY };
+    anchorAt(canvasPoint(ev.center.x - ev.deltaX, ev.center.y - ev.deltaY), ev.pointers.length);
   });
 
   mc.on("pinch pan", function (ev) {
     if(!anchor) return;
+    var fingers = canvasPoint(ev.center.x, ev.center.y);
+    //When a finger lands or lifts mid-gesture the center jumps between one
+    //finger and the midpoint of two, and Hammer's scale starts over at 1.
+    //Keep the framing as it is and anchor again under the new center, or
+    //the photo would jump by half the distance between the fingers.
+    if(ev.pointers.length != anchorPointers) {
+      saveFraming();
+      anchorAt(fingers, ev.pointers.length);
+    }
     //Zoom in only: 1 is the whole photo fitted to the preview, and smaller just
     //leaves empty space around it.
     currentScale = Math.max(MIN_PHOTO_ZOOM, adjustScale * ev.scale);
     var zoom = previewLayout().fit * currentScale;
-    var fingers = canvasPoint(ev.center.x, ev.center.y);
     currentDeltaX = fingers.x / zoom - anchor.x;
     currentDeltaY = fingers.y / zoom - anchor.y;
     clampPan();
