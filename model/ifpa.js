@@ -18,7 +18,7 @@ function load() {
   var rows = csv.load(filename);
   for(i in rows) {
     var cols = rows[i];
-    var name = cols[0];
+    var name = util.normalizeName(cols[0]);
     var num = parseInt(cols[1]);
     var key = players.makeKey(name);
     var p = {

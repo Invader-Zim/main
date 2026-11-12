@@ -4,6 +4,7 @@ const fs = require('fs');
 const mustache = require('mustache');
 
 const config = require('../config');
+const util = require('../lib/util');
 const ANNOUNCEMENTS_TEMPLATE_URL = config.ANNOUNCEMENTS_TEMPLATE_URL;
 const LEAGUERULES_TEMPLATE_URL = config.LEAGUERULES_TEMPLATE_URL;
 const MATCHRULES_TEMPLATE_URL = config.MATCHRULES_TEMPLATE_URL;
@@ -359,8 +360,8 @@ router.get('/rosters.csv',function(req,res) {
           p.name,
           tk,
           // Determine player role
-          teams[tk].captain === p.name ? 'C' :
-          teams[tk].co_captain === p.name ? 'A' :
+          util.sameName(teams[tk].captain, p.name) ? 'C' :
+          util.sameName(teams[tk].co_captain, p.name) ? 'A' :
           'P',
           // TODO: legacy playerdb.csv includes IFPA # and division
         ].join(','))),

@@ -469,9 +469,7 @@ function renderTeam(params) {
   }
 
   let teamHandicap = expectedHcp(lineup);
-  lineup.sort(function(a, b) {
-    return [a.name, b.name].sort()[0] === a.name ? -1 : 1;
-  });
+  lineup.sort(nameSort);
   var awayEPts = expectedPoints(match.away.lineup);
   var homeEPts = expectedPoints(match.home.lineup);
   var expected_points_to_tie = (awayEPts + homeEPts)/2;
@@ -886,8 +884,9 @@ function labelsFor(match, showCount) {
   return labels;
 }
 
+//Orders players (and machines) by name, without regard to case.
 const nameSort = function(a, b) {
-  return [a.name, b.name].sort()[0] === a.name ? -1 : 1;
+  return util.compareNames(a.name, b.name);
 }
 
 //Venue machines are stored as keys; return a sorted copy, ordered by the
